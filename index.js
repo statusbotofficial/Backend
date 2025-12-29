@@ -64,6 +64,31 @@ const groq = new Groq({
 
 app.options("*", cors());
 
+app.get("/api/bot-stats", async (req, res) => {
+    try {
+        const botApiUrl = process.env.BOT_API_URL || "http://localhost:8080/api/stats";
+        
+        const response = await fetch(botApiUrl);
+        if (!response.ok) {
+            return res.status(response.status).json({
+                servers: 0,
+                ping: 0,
+                error: "Failed to fetch bot stats"
+            });
+        }
+        
+        const data = await response.json();
+        res.json(data);
+    } catch (err) {
+        console.error("Bot stats error:", err);
+        res.status(500).json({
+            servers: 0,
+            ping: 0,
+            error: "Could not fetch bot stats"
+        });
+    }
+});
+
 app.post("/api/support/ai", async (req, res) => {
     try {
         const message = req.body?.message?.trim();
