@@ -70,6 +70,7 @@ let botStats = { servers: 0, ping: 0, status: "offline" };
 app.post("/api/bot-stats", (req, res) => {
     try {
         botStats = req.body;
+        console.log("✓ Bot stats received:", botStats);
         res.json({ success: true });
     } catch (err) {
         console.error("Stats update error:", err);
