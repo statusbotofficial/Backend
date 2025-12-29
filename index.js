@@ -36,6 +36,7 @@ KNOWN INFORMATION:
 - <a href="https://status-bot.xyz/commands">Commands page</a>
 - <a href="https://status-bot.xyz/premium">Premium page</a>
 - <a href="https://status-bot.xyz/support">Support page</a>
+- <a href="https://status-bot.xyz/status">Status page</a>
 - <a href="https://status-bot.xyz/terms">Terms & Conditons</a>
 - <a href="https://status-bot.xyz/privacy">Privacy policy</a>
 
@@ -64,29 +65,20 @@ const groq = new Groq({
 
 app.options("*", cors());
 
-app.get("/api/bot-stats", async (req, res) => {
+let botStats = { servers: 0, ping: 0, status: "offline" };
+
+app.post("/api/bot-stats", (req, res) => {
     try {
-        const botApiUrl = process.env.BOT_API_URL || "http://localhost:8080/api/stats";
-        
-        const response = await fetch(botApiUrl);
-        if (!response.ok) {
-            return res.status(response.status).json({
-                servers: 0,
-                ping: 0,
-                error: "Failed to fetch bot stats"
-            });
-        }
-        
-        const data = await response.json();
-        res.json(data);
+        botStats = req.body;
+        res.json({ success: true });
     } catch (err) {
-        console.error("Bot stats error:", err);
-        res.status(500).json({
-            servers: 0,
-            ping: 0,
-            error: "Could not fetch bot stats"
-        });
+        console.error("Stats update error:", err);
+        res.status(500).json({ error: "Failed to update stats" });
     }
+});
+
+app.get("/api/bot-stats", (req, res) => {
+    res.json(botStats);
 });
 
 app.post("/api/support/ai", async (req, res) => {
