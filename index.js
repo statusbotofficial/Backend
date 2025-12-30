@@ -124,13 +124,9 @@ let guildSettings = loadGuildSettings();
 app.post("/api/bot-stats", (req, res) => {
     try {
         botStats = req.body;
-        
-        // Extract guild IDs - handle both direct and nested formats
+        // Also extract guild IDs if provided
         if (req.body.guild_ids && Array.isArray(req.body.guild_ids)) {
             botGuilds = req.body.guild_ids;
-        } else if (req.body.guilds_data && typeof req.body.guilds_data === "object") {
-            // If guilds_data is provided, extract guild IDs from it
-            botGuilds = Object.keys(req.body.guilds_data);
         }
         
         // Store comprehensive guild data from bot
@@ -139,7 +135,7 @@ app.post("/api/bot-stats", (req, res) => {
             saveGuildData(guildData);
         }
         
-        console.log("✓ Bot stats received - Servers:", botStats.servers, "- Bot in guilds:", botGuilds.length);
+        console.log("✓ Bot stats received:", botStats);
         res.json({ success: true });
     } catch (err) {
         console.error("Stats update error:", err);
@@ -152,9 +148,7 @@ app.get("/api/bot-stats", (req, res) => {
 });
 
 app.get("/api/bot-guilds", (req, res) => {
-    // Ensure we return an array of guild IDs
-    const guilds = Array.isArray(botGuilds) ? botGuilds : [];
-    res.json({ guilds });
+    res.json({ guilds: botGuilds });
 });
 
 // Get guild overview data
@@ -173,56 +167,10 @@ app.get("/api/guild/:guildId/overview", (req, res) => {
     });
 });
 
-// Helper function to calculate XP needed for a level (matching Python bot logic)
-function calculateXpForLevel(level) {
-    if (level <= 1) return 0;
-    let total = 0;
-    for (let l = 1; l < level; l++) {
-        total += 100 + (l - 1) * 50;
-    }
-    return total;
-}
-
-// Get user's rank
-app.get("/api/guild/:guildId/user/:userId/rank", (req, res) => {
-    const { guildId, userId } = req.params;
-    
-    const data = guildData[guildId] || {};
-    const xpUsers = data.xp_leaderboard || [];
-    
-    // Find user in leaderboard
-    const userIndex = xpUsers.findIndex(u => String(u.user_id) === String(userId));
-    
-    if (userIndex === -1) {
-        return res.json({
-            rank: null,
-            xp: 0,
-            level: 0,
-            xpNeeded: 100
-        });
-    }
-    
-    const user = xpUsers[userIndex];
-    const currentXp = user.value || 0;
-    const level = user.level || 0;
-    const xpForCurrentLevel = calculateXpForLevel(level);
-    const xpForNextLevel = calculateXpForLevel(level + 1);
-    const xpNeeded = xpForNextLevel - xpForCurrentLevel;
-    const xpProgress = currentXp - xpForCurrentLevel;
-    
-    res.json({
-        rank: userIndex + 1,
-        xp: xpProgress,
-        level: level,
-        xpNeeded: xpNeeded
-    });
-});
-
 // Get XP leaderboard
 app.get("/api/guild/:guildId/leaderboard/xp", (req, res) => {
     const { guildId } = req.params;
     const limit = parseInt(req.query.limit) || 10;
-    const offset = parseInt(req.query.offset) || 0;
     
     const data = guildData[guildId] || {};
     const xpUsers = data.xp_leaderboard || [];
@@ -230,7 +178,7 @@ app.get("/api/guild/:guildId/leaderboard/xp", (req, res) => {
     res.json({
         guildId,
         type: "xp",
-        leaderboard: xpUsers.slice(offset, offset + limit),
+        leaderboard: xpUsers.slice(0, limit),
         total: xpUsers.length
     });
 });
