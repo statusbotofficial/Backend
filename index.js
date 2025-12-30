@@ -266,11 +266,18 @@ app.get("/api/guild/:guildId/leaderboard/messages", (req, res) => {
     const data = guildData[guildId] || {};
     const xpUsers = data.xp_leaderboard || [];
     
+    console.log(`[MESSAGES] Guild ${guildId}: xpUsers count = ${xpUsers.length}`);
+    if (xpUsers.length > 0) {
+        console.log(`[MESSAGES] First user:`, JSON.stringify(xpUsers[0]));
+    }
+    
     // Extract message count from users (check multiple field names)
     const messageUsers = xpUsers.map(user => ({
         ...user,
         value: user.message_count || user.messages || 0
     })).sort((a, b) => b.value - a.value);
+    
+    console.log(`[MESSAGES] After mapping - first user value:`, messageUsers.length > 0 ? messageUsers[0].value : 'N/A');
     
     res.json({
         guildId,
