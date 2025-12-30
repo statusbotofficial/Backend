@@ -152,8 +152,7 @@ app.get("/api/bot-stats", (req, res) => {
 });
 
 app.get("/api/bot-guilds", (req, res) => {
-    const guilds = Array.isArray(botGuilds) ? botGuilds : [];
-    res.json({ guilds });
+    res.json({ guilds: botGuilds });
 });
 
 // Get guild overview data
