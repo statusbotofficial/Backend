@@ -155,6 +155,103 @@ app.get("/api/bot-guilds", (req, res) => {
     res.json({ guilds: botGuilds });
 });
 
+// OAuth2 code exchange endpoint
+app.post("/api/auth/discord", async (req, res) => {
+    try {
+        const { code } = req.body;
+        
+        if (!code) {
+            return res.status(400).json({ error: "Authorization code is required" });
+        }
+
+        const clientId = "1436123870158520411";
+        const clientSecret = process.env.DISCORD_CLIENT_SECRET;
+        const redirectUri = "https://status-bot.xyz/";
+
+        if (!clientSecret) {
+            console.error("DISCORD_CLIENT_SECRET is not set");
+            return res.status(500).json({ error: "Server configuration error" });
+        }
+
+        // Exchange code for token
+        const tokenResponse = await fetch("https://discord.com/api/oauth2/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                client_id: clientId,
+                client_secret: clientSecret,
+                code: code,
+                grant_type: "authorization_code",
+                redirect_uri: redirectUri,
+                scope: "identify guilds guilds.channels.read guilds.members.read"
+            })
+        });
+
+        if (!tokenResponse.ok) {
+            const error = await tokenResponse.text();
+            console.error("Discord token exchange error:", error);
+            return res.status(400).json({ error: "Failed to exchange authorization code" });
+        }
+
+        const tokenData = await tokenResponse.json();
+        const accessToken = tokenData.access_token;
+
+        // Fetch user data with the token
+        const userResponse = await fetch("https://discord.com/api/users/@me", {
+            headers: { Authorization: `Bearer ${accessToken}` }
+        });
+
+        if (!userResponse.ok) {
+            return res.status(400).json({ error: "Failed to fetch user data" });
+        }
+
+        const userData = await userResponse.json();
+
+        // Fetch user's guilds
+        const guildsResponse = await fetch("https://discord.com/api/users/@me/guilds", {
+            headers: { Authorization: `Bearer ${accessToken}` }
+        });
+
+        let userGuilds = [];
+        if (guildsResponse.ok) {
+            userGuilds = await guildsResponse.json();
+        }
+
+        // Fetch channels for each guild where bot is active
+        for (let guild of userGuilds) {
+            if (botGuilds.includes(guild.id)) {
+                try {
+                    const channelsResponse = await fetch(
+                        `https://discord.com/api/guilds/${guild.id}/channels`,
+                        { headers: { Authorization: `Bearer ${accessToken}` } }
+                    );
+                    if (channelsResponse.ok) {
+                        const channels = await channelsResponse.json();
+                        // Store channels in guild data
+                        if (!guildData[guild.id]) {
+                            guildData[guild.id] = {};
+                        }
+                        guildData[guild.id].channels = channels;
+                        saveGuildData(guildData);
+                    }
+                } catch (err) {
+                    console.error(`Failed to fetch channels for guild ${guild.id}:`, err);
+                }
+            }
+        }
+
+        res.json({
+            success: true,
+            user: userData,
+            guilds: userGuilds,
+            token: accessToken
+        });
+    } catch (err) {
+        console.error("OAuth error:", err);
+        res.status(500).json({ error: "Authentication failed" });
+    }
+});
+
 // Get guild overview data
 app.get("/api/guild/:guildId/overview", (req, res) => {
     const { guildId } = req.params;
