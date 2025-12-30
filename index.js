@@ -82,6 +82,29 @@ app.get("/api/bot-stats", (req, res) => {
     res.json(botStats);
 });
 
+app.get("/api/check-bot-in-guild/:guildId", async (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const botToken = process.env.DISCORD_BOT_TOKEN;
+        const botId = "1436123870158520411";
+
+        if (!botToken) {
+            return res.status(500).json({ error: "Bot token not configured" });
+        }
+
+        const response = await fetch(
+            `https://discord.com/api/guilds/${guildId}/members/${botId}`,
+            { headers: { Authorization: `Bot ${botToken}` } }
+        );
+
+        const botInGuild = response.ok;
+        res.json({ botInGuild });
+    } catch (err) {
+        console.error("Bot check error:", err);
+        res.status(500).json({ error: "Failed to check bot membership" });
+    }
+});
+
 app.post("/api/support/ai", async (req, res) => {
     try {
         const message = req.body?.message?.trim();
