@@ -152,7 +152,8 @@ app.get("/api/bot-stats", (req, res) => {
 });
 
 app.get("/api/bot-guilds", (req, res) => {
-    res.json({ guilds: botGuilds });
+    const guilds = Array.isArray(botGuilds) ? botGuilds : [];
+    res.json({ guilds });
 });
 
 // Get guild overview data
@@ -185,8 +186,7 @@ app.get("/api/guild/:guildId/user/:userId/rank", (req, res) => {
         return res.json({
             rank: null,
             xp: 0,
-            level: 0,
-            xpNeeded: 100
+            level: 0
         });
     }
     
