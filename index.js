@@ -167,6 +167,16 @@ app.get("/api/guild/:guildId/overview", (req, res) => {
     });
 });
 
+// Helper function to calculate XP needed for a level (matching Python bot logic)
+function calculateXpForLevel(level) {
+    if (level <= 1) return 0;
+    let total = 0;
+    for (let l = 1; l < level; l++) {
+        total += 100 + (l - 1) * 50;
+    }
+    return total;
+}
+
 // Get user's rank
 app.get("/api/guild/:guildId/user/:userId/rank", (req, res) => {
     const { guildId, userId } = req.params;
@@ -189,11 +199,14 @@ app.get("/api/guild/:guildId/user/:userId/rank", (req, res) => {
     const user = xpUsers[userIndex];
     const currentXp = user.value || 0;
     const level = user.level || 0;
-    const xpNeeded = 100; // XP needed for next level
+    const xpForCurrentLevel = calculateXpForLevel(level);
+    const xpForNextLevel = calculateXpForLevel(level + 1);
+    const xpNeeded = xpForNextLevel - xpForCurrentLevel;
+    const xpProgress = currentXp - xpForCurrentLevel;
     
     res.json({
         rank: userIndex + 1,
-        xp: currentXp,
+        xp: xpProgress,
         level: level,
         xpNeeded: xpNeeded
     });
