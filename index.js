@@ -124,9 +124,13 @@ let guildSettings = loadGuildSettings();
 app.post("/api/bot-stats", (req, res) => {
     try {
         botStats = req.body;
-        // Also extract guild IDs if provided
+        
+        // Extract guild IDs - handle both direct and nested formats
         if (req.body.guild_ids && Array.isArray(req.body.guild_ids)) {
             botGuilds = req.body.guild_ids;
+        } else if (req.body.guilds_data && typeof req.body.guilds_data === "object") {
+            // If guilds_data is provided, extract guild IDs from it
+            botGuilds = Object.keys(req.body.guilds_data);
         }
         
         // Store comprehensive guild data from bot
@@ -135,7 +139,7 @@ app.post("/api/bot-stats", (req, res) => {
             saveGuildData(guildData);
         }
         
-        console.log("✓ Bot stats received:", botStats);
+        console.log("✓ Bot stats received - Servers:", botStats.servers, "- Bot in guilds:", botGuilds.length);
         res.json({ success: true });
     } catch (err) {
         console.error("Stats update error:", err);
@@ -148,7 +152,9 @@ app.get("/api/bot-stats", (req, res) => {
 });
 
 app.get("/api/bot-guilds", (req, res) => {
-    res.json({ guilds: botGuilds });
+    // Ensure we return an array of guild IDs
+    const guilds = Array.isArray(botGuilds) ? botGuilds : [];
+    res.json({ guilds });
 });
 
 // Get guild overview data
