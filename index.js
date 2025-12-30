@@ -128,6 +128,9 @@ app.post("/api/bot-stats", (req, res) => {
         // Also extract guild IDs if provided
         if (req.body.guild_ids && Array.isArray(req.body.guild_ids)) {
             botGuilds = req.body.guild_ids;
+        } else if (req.body.guilds_data && typeof req.body.guilds_data === "object") {
+            // If guilds_data provided, extract guild IDs from it
+            botGuilds = Object.keys(req.body.guilds_data);
         }
         
         // Store comprehensive guild data from bot
