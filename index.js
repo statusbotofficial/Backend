@@ -266,10 +266,10 @@ app.get("/api/guild/:guildId/leaderboard/messages", (req, res) => {
     const data = guildData[guildId] || {};
     const xpUsers = data.xp_leaderboard || [];
     
-    // Extract message count from users
+    // Extract message count from users (check multiple field names)
     const messageUsers = xpUsers.map(user => ({
         ...user,
-        value: user.messages || 0
+        value: user.message_count || user.messages || 0
     })).sort((a, b) => b.value - a.value);
     
     res.json({
