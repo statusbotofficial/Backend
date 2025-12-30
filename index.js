@@ -1,8 +1,59 @@
 import express from "express";
 import cors from "cors";
 import Groq from "groq-sdk";
+import fs from "fs";
+import path from "path";
 
 const app = express();
+
+// Data persistence directory
+const DATA_DIR = "./data";
+if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+const GUILD_DATA_FILE = path.join(DATA_DIR, "guild_data.json");
+const GUILD_SETTINGS_FILE = path.join(DATA_DIR, "guild_settings.json");
+
+// Helper functions for file-based persistence
+function loadGuildData() {
+    try {
+        if (fs.existsSync(GUILD_DATA_FILE)) {
+            return JSON.parse(fs.readFileSync(GUILD_DATA_FILE, "utf-8"));
+        }
+    } catch (err) {
+        console.error("Error loading guild data:", err);
+    }
+    return {};
+}
+
+function saveGuildData(data) {
+    try {
+        fs.writeFileSync(GUILD_DATA_FILE, JSON.stringify(data, null, 2));
+    } catch (err) {
+        console.error("Error saving guild data:", err);
+    }
+}
+
+function loadGuildSettings() {
+    try {
+        if (fs.existsSync(GUILD_SETTINGS_FILE)) {
+            return JSON.parse(fs.readFileSync(GUILD_SETTINGS_FILE, "utf-8"));
+        }
+    } catch (err) {
+        console.error("Error loading guild settings:", err);
+    }
+    return {};
+}
+
+function saveGuildSettings(data) {
+    try {
+        fs.writeFileSync(GUILD_SETTINGS_FILE, JSON.stringify(data, null, 2));
+    } catch (err) {
+        console.error("Error saving guild settings:", err);
+    }
+}
+
 const SYSTEM_PROMPT = `
 You are the official AI support assistant for the Status Bot Discord bot.
 
@@ -67,6 +118,8 @@ app.options("*", cors());
 
 let botStats = { servers: 0, ping: 0, status: "offline" };
 let botGuilds = []; // Store guild IDs where bot is active
+let guildData = loadGuildData();
+let guildSettings = loadGuildSettings();
 
 app.post("/api/bot-stats", (req, res) => {
     try {
@@ -75,6 +128,13 @@ app.post("/api/bot-stats", (req, res) => {
         if (req.body.guild_ids && Array.isArray(req.body.guild_ids)) {
             botGuilds = req.body.guild_ids;
         }
+        
+        // Store comprehensive guild data from bot
+        if (req.body.guilds_data && typeof req.body.guilds_data === "object") {
+            guildData = { ...guildData, ...req.body.guilds_data };
+            saveGuildData(guildData);
+        }
+        
         console.log("✓ Bot stats received:", botStats);
         res.json({ success: true });
     } catch (err) {
@@ -89,6 +149,90 @@ app.get("/api/bot-stats", (req, res) => {
 
 app.get("/api/bot-guilds", (req, res) => {
     res.json({ guilds: botGuilds });
+});
+
+// Get guild overview data
+app.get("/api/guild/:guildId/overview", (req, res) => {
+    const { guildId } = req.params;
+    const data = guildData[guildId] || {};
+    
+    res.json({
+        guildId,
+        members: data.members || 0,
+        memberCount: data.member_count || 0,
+        premium: data.premium || false,
+        trackedUser: data.tracked_user || null,
+        trackedUserStatus: data.tracked_user_status || "unknown",
+        botStatus: botStats.status || "offline"
+    });
+});
+
+// Get XP leaderboard
+app.get("/api/guild/:guildId/leaderboard/xp", (req, res) => {
+    const { guildId } = req.params;
+    const limit = parseInt(req.query.limit) || 10;
+    
+    const data = guildData[guildId] || {};
+    const xpUsers = data.xp_leaderboard || [];
+    
+    res.json({
+        guildId,
+        type: "xp",
+        leaderboard: xpUsers.slice(0, limit),
+        total: xpUsers.length
+    });
+});
+
+// Get Economy leaderboard
+app.get("/api/guild/:guildId/leaderboard/economy", (req, res) => {
+    const { guildId } = req.params;
+    const limit = parseInt(req.query.limit) || 10;
+    
+    const data = guildData[guildId] || {};
+    const economyUsers = data.economy_leaderboard || [];
+    
+    res.json({
+        guildId,
+        type: "economy",
+        leaderboard: economyUsers.slice(0, limit),
+        total: economyUsers.length
+    });
+});
+
+// Get guild settings
+app.get("/api/guild/:guildId/settings", (req, res) => {
+    const { guildId } = req.params;
+    const settings = guildSettings[guildId] || {};
+    
+    res.json({
+        guildId,
+        settings
+    });
+});
+
+// Save guild settings
+app.post("/api/guild/:guildId/settings", (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { settings } = req.body;
+        
+        if (!settings || typeof settings !== "object") {
+            return res.status(400).json({ error: "Invalid settings format" });
+        }
+        
+        guildSettings[guildId] = {
+            ...guildSettings[guildId],
+            ...settings,
+            lastUpdated: new Date().toISOString()
+        };
+        
+        saveGuildSettings(guildSettings);
+        
+        res.json({ success: true, settings: guildSettings[guildId] });
+    } catch (err) {
+        console.error("Error saving settings:", err);
+        res.status(500).json({ error: "Failed to save settings" });
+    }
 });
 
 app.post("/api/support/ai", async (req, res) => {
