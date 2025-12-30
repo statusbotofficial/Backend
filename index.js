@@ -193,13 +193,11 @@ app.get("/api/guild/:guildId/user/:userId/rank", (req, res) => {
     const user = xpUsers[userIndex];
     const currentXp = user.value || 0;
     const level = user.level || 0;
-    const xpNeeded = 100; // XP needed for next level
     
     res.json({
         rank: userIndex + 1,
         xp: currentXp,
-        level: level,
-        xpNeeded: xpNeeded
+        level: level
     });
 });
 
