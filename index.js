@@ -66,10 +66,15 @@ const groq = new Groq({
 app.options("*", cors());
 
 let botStats = { servers: 0, ping: 0, status: "offline" };
+let botGuilds = []; // Store guild IDs where bot is active
 
 app.post("/api/bot-stats", (req, res) => {
     try {
         botStats = req.body;
+        // Also extract guild IDs if provided
+        if (req.body.guild_ids && Array.isArray(req.body.guild_ids)) {
+            botGuilds = req.body.guild_ids;
+        }
         console.log("✓ Bot stats received:", botStats);
         res.json({ success: true });
     } catch (err) {
@@ -82,27 +87,8 @@ app.get("/api/bot-stats", (req, res) => {
     res.json(botStats);
 });
 
-app.get("/api/check-bot-in-guild/:guildId", async (req, res) => {
-    try {
-        const { guildId } = req.params;
-        const botToken = process.env.DISCORD_BOT_TOKEN;
-        const botId = "1436123870158520411";
-
-        if (!botToken) {
-            return res.status(500).json({ error: "Bot token not configured" });
-        }
-
-        const response = await fetch(
-            `https://discord.com/api/guilds/${guildId}/members/${botId}`,
-            { headers: { Authorization: `Bot ${botToken}` } }
-        );
-
-        const botInGuild = response.ok;
-        res.json({ botInGuild });
-    } catch (err) {
-        console.error("Bot check error:", err);
-        res.status(500).json({ error: "Failed to check bot membership" });
-    }
+app.get("/api/bot-guilds", (req, res) => {
+    res.json({ guilds: botGuilds });
 });
 
 app.post("/api/support/ai", async (req, res) => {
