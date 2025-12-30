@@ -234,6 +234,52 @@ app.get("/api/guild/:guildId/leaderboard/economy", (req, res) => {
     });
 });
 
+// Get Voice Minutes leaderboard
+app.get("/api/guild/:guildId/leaderboard/voice", (req, res) => {
+    const { guildId } = req.params;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = parseInt(req.query.offset) || 0;
+    
+    const data = guildData[guildId] || {};
+    const xpUsers = data.xp_leaderboard || [];
+    
+    // Extract voice minutes from users
+    const voiceUsers = xpUsers.map(user => ({
+        ...user,
+        value: user.voice_minutes || 0
+    })).sort((a, b) => b.value - a.value);
+    
+    res.json({
+        guildId,
+        type: "voice",
+        leaderboard: voiceUsers.slice(offset, offset + limit),
+        total: voiceUsers.length
+    });
+});
+
+// Get Messages leaderboard
+app.get("/api/guild/:guildId/leaderboard/messages", (req, res) => {
+    const { guildId } = req.params;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = parseInt(req.query.offset) || 0;
+    
+    const data = guildData[guildId] || {};
+    const xpUsers = data.xp_leaderboard || [];
+    
+    // Extract message count from users
+    const messageUsers = xpUsers.map(user => ({
+        ...user,
+        value: user.messages || 0
+    })).sort((a, b) => b.value - a.value);
+    
+    res.json({
+        guildId,
+        type: "messages",
+        leaderboard: messageUsers.slice(offset, offset + limit),
+        total: messageUsers.length
+    });
+});
+
 // Get guild settings
 app.get("/api/guild/:guildId/settings", (req, res) => {
     const { guildId } = req.params;
