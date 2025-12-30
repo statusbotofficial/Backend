@@ -167,10 +167,43 @@ app.get("/api/guild/:guildId/overview", (req, res) => {
     });
 });
 
+// Get user's rank
+app.get("/api/guild/:guildId/user/:userId/rank", (req, res) => {
+    const { guildId, userId } = req.params;
+    
+    const data = guildData[guildId] || {};
+    const xpUsers = data.xp_leaderboard || [];
+    
+    // Find user in leaderboard
+    const userIndex = xpUsers.findIndex(u => String(u.user_id) === String(userId));
+    
+    if (userIndex === -1) {
+        return res.json({
+            rank: null,
+            xp: 0,
+            level: 0,
+            xpNeeded: 100
+        });
+    }
+    
+    const user = xpUsers[userIndex];
+    const currentXp = user.value || 0;
+    const level = user.level || 0;
+    const xpNeeded = 100; // XP needed for next level
+    
+    res.json({
+        rank: userIndex + 1,
+        xp: currentXp,
+        level: level,
+        xpNeeded: xpNeeded
+    });
+});
+
 // Get XP leaderboard
 app.get("/api/guild/:guildId/leaderboard/xp", (req, res) => {
     const { guildId } = req.params;
     const limit = parseInt(req.query.limit) || 10;
+    const offset = parseInt(req.query.offset) || 0;
     
     const data = guildData[guildId] || {};
     const xpUsers = data.xp_leaderboard || [];
@@ -178,7 +211,7 @@ app.get("/api/guild/:guildId/leaderboard/xp", (req, res) => {
     res.json({
         guildId,
         type: "xp",
-        leaderboard: xpUsers.slice(0, limit),
+        leaderboard: xpUsers.slice(offset, offset + limit),
         total: xpUsers.length
     });
 });
