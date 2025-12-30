@@ -183,7 +183,7 @@ app.post("/api/auth/discord", async (req, res) => {
                 code: code,
                 grant_type: "authorization_code",
                 redirect_uri: redirectUri,
-                scope: "identify guilds guilds.channels.read guilds.members.read"
+                scope: "identify guilds+guilds.channels.read+guilds.members.read"
             })
         });
 
