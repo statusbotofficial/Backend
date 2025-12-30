@@ -427,6 +427,51 @@ app.post("/api/guild/:guildId/status/reset", (req, res) => {
     }
 });
 
+// Get guild channels
+app.get("/api/guild/:guildId/channels", (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const guildData = loadGuildData();
+        
+        if (!guildData[guildId] || !guildData[guildId].channels) {
+            return res.json({ channels: [] });
+        }
+        
+        const channels = guildData[guildId].channels.map(channel => ({
+            id: channel.id,
+            name: channel.name,
+            type: channel.type
+        })).sort((a, b) => a.name.localeCompare(b.name));
+        
+        res.json({ channels });
+    } catch (err) {
+        console.error("Error fetching guild channels:", err);
+        res.status(500).json({ error: "Failed to fetch channels" });
+    }
+});
+
+// Update guild channels (bot endpoint)
+app.post("/api/guild/:guildId/channels", (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { channels } = req.body;
+        
+        if (!Array.isArray(channels)) {
+            return res.status(400).json({ error: "Channels must be an array" });
+        }
+        
+        const guildData = loadGuildData();
+        guildData[guildId] = guildData[guildId] || {};
+        guildData[guildId].channels = channels;
+        saveGuildData(guildData);
+        
+        res.json({ success: true, message: "Channels updated" });
+    } catch (err) {
+        console.error("Error updating guild channels:", err);
+        res.status(500).json({ error: "Failed to update channels" });
+    }
+});
+
 app.post("/api/support/ai", async (req, res) => {
     try {
         const message = req.body?.message?.trim();
