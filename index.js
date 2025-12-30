@@ -323,6 +323,110 @@ app.post("/api/guild/:guildId/settings", (req, res) => {
     }
 });
 
+// Status Tracking Endpoints
+// Set user to track
+app.post("/api/guild/:guildId/status/set", (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { user_id, delay, default_offline_message } = req.body;
+        
+        if (!user_id) {
+            return res.status(400).json({ error: "User ID is required" });
+        }
+        
+        // Create a request to the bot to set tracking
+        // For now, we'll store it and the bot will handle it via api.py
+        guildSettings[guildId] = guildSettings[guildId] || {};
+        guildSettings[guildId].status_tracking = {
+            user_id: user_id,
+            delay: parseInt(delay) || 0,
+            default_offline_message: default_offline_message || null,
+            updated_at: new Date().toISOString()
+        };
+        
+        saveGuildSettings(guildSettings);
+        
+        res.json({ success: true, message: "User tracking set" });
+    } catch (err) {
+        console.error("Error setting user tracking:", err);
+        res.status(500).json({ error: "Failed to set user tracking" });
+    }
+});
+
+// Start tracking (send message to channel)
+app.post("/api/guild/:guildId/status/track", (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { channel_id, automatic, embed } = req.body;
+        
+        if (!channel_id) {
+            return res.status(400).json({ error: "Channel ID is required" });
+        }
+        
+        guildSettings[guildId] = guildSettings[guildId] || {};
+        guildSettings[guildId].status_track_config = {
+            channel_id: channel_id,
+            automatic: automatic === 'yes',
+            embed: embed === 'yes',
+            updated_at: new Date().toISOString()
+        };
+        
+        saveGuildSettings(guildSettings);
+        
+        res.json({ success: true, message: "Tracking configuration saved" });
+    } catch (err) {
+        console.error("Error configuring tracking:", err);
+        res.status(500).json({ error: "Failed to configure tracking" });
+    }
+});
+
+// Update status manually
+app.post("/api/guild/:guildId/status/update", (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { status, reason } = req.body;
+        
+        if (!status || !['online', 'offline', 'maintenance'].includes(status)) {
+            return res.status(400).json({ error: "Invalid status" });
+        }
+        
+        guildSettings[guildId] = guildSettings[guildId] || {};
+        guildSettings[guildId].status_override = {
+            status: status,
+            reason: reason || null,
+            manual: true,
+            updated_at: new Date().toISOString()
+        };
+        
+        saveGuildSettings(guildSettings);
+        
+        res.json({ success: true, message: "Status updated" });
+    } catch (err) {
+        console.error("Error updating status:", err);
+        res.status(500).json({ error: "Failed to update status" });
+    }
+});
+
+// Reset status to automatic
+app.post("/api/guild/:guildId/status/reset", (req, res) => {
+    try {
+        const { guildId } = req.params;
+        
+        guildSettings[guildId] = guildSettings[guildId] || {};
+        guildSettings[guildId].status_override = {
+            manual: false,
+            updated_at: new Date().toISOString()
+        };
+        
+        saveGuildSettings(guildSettings);
+        
+        res.json({ success: true, message: "Status reset to automatic" });
+    } catch (err) {
+        console.error("Error resetting status:", err);
+        res.status(500).json({ error: "Failed to reset status" });
+    }
+});
+
 app.post("/api/support/ai", async (req, res) => {
     try {
         const message = req.body?.message?.trim();
