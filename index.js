@@ -185,7 +185,8 @@ app.get("/api/guild/:guildId/user/:userId/rank", (req, res) => {
         return res.json({
             rank: null,
             xp: 0,
-            level: 0
+            level: 0,
+            xpNeeded: 100
         });
     }
     
