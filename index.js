@@ -365,28 +365,20 @@ app.post("/api/guild/:guildId/status/set", (req, res) => {
             return res.status(400).json({ error: "Invalid user ID format" });
         }
         
-        // Save to guild settings for website use
-        guildSettings[guildId] = guildSettings[guildId] || {};
-        guildSettings[guildId].status_tracking = {
-            user_id: user_id,
-            delay: parseInt(delay) || 0,
-            default_offline_message: default_offline_message || null,
-            updated_at: new Date().toISOString()
-        };
-        saveGuildSettings(guildSettings);
+        // Load current tracked users
+        let trackedUsers = loadTrackedUsers();
         
-        // Also save to tracked_users.json for bot compatibility
-        const trackedUsers = loadTrackedUsers();
-        console.log("Before update:", trackedUsers);
+        // Update tracked users exactly like the bot command does
         trackedUsers[guildId] = {
             user: parseInt(user_id),
             delay: parseInt(delay) || 0,
             default_offline_message: default_offline_message || null
         };
-        console.log("After update:", trackedUsers);
-        saveTrackedUsers(trackedUsers);
-        console.log(`Saved tracked user for guild ${guildId}`);
         
+        // Save to JSON file
+        saveTrackedUsers(trackedUsers);
+        
+        console.log(`Set user ${user_id} for guild ${guildId}`);
         res.json({ success: true, message: "User tracking set" });
     } catch (err) {
         console.error("Error setting user tracking:", err);
@@ -453,7 +445,7 @@ app.post("/api/guild/:guildId/status/reset", (req, res) => {
     try {
         const { guildId } = req.params;
         
-        // Wipe all status tracking settings for a fresh start
+        // Clear all status tracking settings for a clean start
         if (guildSettings[guildId]) {
             delete guildSettings[guildId].status_tracking;
             delete guildSettings[guildId].status_track_config;
@@ -462,8 +454,8 @@ app.post("/api/guild/:guildId/status/reset", (req, res) => {
         
         saveGuildSettings(guildSettings);
         
-        // Also remove from tracked_users.json for bot compatibility
-        const trackedUsers = loadTrackedUsers();
+        // Remove from tracked_users.json for clean slate
+        let trackedUsers = loadTrackedUsers();
         if (trackedUsers[guildId]) {
             delete trackedUsers[guildId];
             saveTrackedUsers(trackedUsers);
