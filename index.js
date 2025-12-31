@@ -14,7 +14,7 @@ if (!fs.existsSync(DATA_DIR)) {
 
 const GUILD_DATA_FILE = path.join(DATA_DIR, "guild_data.json");
 const GUILD_SETTINGS_FILE = path.join(DATA_DIR, "guild_settings.json");
-const TRACKED_USERS_FILE = path.join(DATA_DIR, "tracked_users.json");
+const TRACKED_USERS_FILE = "tracked_users.json"; // Same location as bot
 
 // Helper functions for file-based persistence
 function loadGuildData() {
@@ -377,12 +377,15 @@ app.post("/api/guild/:guildId/status/set", (req, res) => {
         
         // Also save to tracked_users.json for bot compatibility
         const trackedUsers = loadTrackedUsers();
+        console.log("Before update:", trackedUsers);
         trackedUsers[guildId] = {
             user: parseInt(user_id),
             delay: parseInt(delay) || 0,
             default_offline_message: default_offline_message || null
         };
+        console.log("After update:", trackedUsers);
         saveTrackedUsers(trackedUsers);
+        console.log(`Saved tracked user for guild ${guildId}`);
         
         res.json({ success: true, message: "User tracking set" });
     } catch (err) {
@@ -464,6 +467,7 @@ app.post("/api/guild/:guildId/status/reset", (req, res) => {
         if (trackedUsers[guildId]) {
             delete trackedUsers[guildId];
             saveTrackedUsers(trackedUsers);
+            console.log(`Removed tracked user for guild ${guildId}`);
         }
         
         res.json({ success: true, message: "Status settings cleared" });
