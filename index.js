@@ -365,18 +365,19 @@ app.post("/api/guild/:guildId/status/set", (req, res) => {
             return res.status(400).json({ error: "Invalid user ID format" });
         }
         
-        // Load current tracked users
-        let trackedUsers = loadTrackedUsers();
+        // Load current guild settings
+        let settings = loadGuildSettings();
         
-        // Update tracked users exactly like the bot command does
-        trackedUsers[guildId] = {
-            user: parseInt(user_id),
+        // Update status_tracking exactly like the bot command does
+        settings[guildId] = settings[guildId] || {};
+        settings[guildId].status_tracking = {
+            user_id: user_id,
             delay: parseInt(delay) || 0,
             default_offline_message: default_offline_message || null
         };
         
-        // Save to JSON file
-        saveTrackedUsers(trackedUsers);
+        // Save to guild_settings.json (bot reads this)
+        saveGuildSettings(settings);
         
         console.log(`Set user ${user_id} for guild ${guildId}`);
         res.json({ success: true, message: "User tracking set" });
@@ -446,22 +447,16 @@ app.post("/api/guild/:guildId/status/reset", (req, res) => {
         const { guildId } = req.params;
         
         // Clear all status tracking settings for a clean start
-        if (guildSettings[guildId]) {
-            delete guildSettings[guildId].status_tracking;
-            delete guildSettings[guildId].status_track_config;
-            delete guildSettings[guildId].status_override;
+        let settings = loadGuildSettings();
+        if (settings[guildId]) {
+            delete settings[guildId].status_tracking;
+            delete settings[guildId].status_track_config;
+            delete settings[guildId].status_override;
         }
         
-        saveGuildSettings(guildSettings);
+        saveGuildSettings(settings);
         
-        // Remove from tracked_users.json for clean slate
-        let trackedUsers = loadTrackedUsers();
-        if (trackedUsers[guildId]) {
-            delete trackedUsers[guildId];
-            saveTrackedUsers(trackedUsers);
-            console.log(`Removed tracked user for guild ${guildId}`);
-        }
-        
+        console.log(`Reset status settings for guild ${guildId}`);
         res.json({ success: true, message: "Status settings cleared" });
     } catch (err) {
         console.error("Error resetting status:", err);
