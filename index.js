@@ -357,29 +357,6 @@ app.post("/api/guild/:guildId/status/set", (req, res) => {
         
         saveGuildSettings(guildSettings);
         
-        // IMPORTANT: Also update tracked_users.json so the bot knows about this configuration
-        const trackedUsersPath = path.join(path.dirname(DATA_DIR), "tracked_users.json");
-        let trackedUsers = {};
-        try {
-            if (fs.existsSync(trackedUsersPath)) {
-                trackedUsers = JSON.parse(fs.readFileSync(trackedUsersPath, "utf-8"));
-            }
-        } catch (err) {
-            console.error("Error loading tracked_users.json:", err);
-        }
-        
-        trackedUsers[guildId] = {
-            user: parseInt(user_id),
-            delay: parseInt(delay) || 0,
-            default_offline_message: default_offline_message || null
-        };
-        
-        try {
-            fs.writeFileSync(trackedUsersPath, JSON.stringify(trackedUsers, null, 2));
-        } catch (err) {
-            console.error("Error saving tracked_users.json:", err);
-        }
-        
         res.json({ success: true, message: "User tracking set" });
     } catch (err) {
         console.error("Error setting user tracking:", err);
@@ -454,25 +431,6 @@ app.post("/api/guild/:guildId/status/reset", (req, res) => {
         }
         
         saveGuildSettings(guildSettings);
-        
-        // IMPORTANT: Also remove from tracked_users.json
-        const trackedUsersPath = path.join(path.dirname(DATA_DIR), "tracked_users.json");
-        let trackedUsers = {};
-        try {
-            if (fs.existsSync(trackedUsersPath)) {
-                trackedUsers = JSON.parse(fs.readFileSync(trackedUsersPath, "utf-8"));
-            }
-        } catch (err) {
-            console.error("Error loading tracked_users.json:", err);
-        }
-        
-        delete trackedUsers[guildId];
-        
-        try {
-            fs.writeFileSync(trackedUsersPath, JSON.stringify(trackedUsers, null, 2));
-        } catch (err) {
-            console.error("Error saving tracked_users.json:", err);
-        }
         
         res.json({ success: true, message: "Status settings cleared" });
     } catch (err) {
