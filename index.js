@@ -412,15 +412,16 @@ app.post("/api/guild/:guildId/status/reset", (req, res) => {
     try {
         const { guildId } = req.params;
         
-        guildSettings[guildId] = guildSettings[guildId] || {};
-        guildSettings[guildId].status_override = {
-            manual: false,
-            updated_at: new Date().toISOString()
-        };
+        // Wipe all status tracking settings for a fresh start
+        if (guildSettings[guildId]) {
+            delete guildSettings[guildId].status_tracking;
+            delete guildSettings[guildId].status_track_config;
+            delete guildSettings[guildId].status_override;
+        }
         
         saveGuildSettings(guildSettings);
         
-        res.json({ success: true, message: "Status reset to automatic" });
+        res.json({ success: true, message: "Status settings cleared" });
     } catch (err) {
         console.error("Error resetting status:", err);
         res.status(500).json({ error: "Failed to reset status" });
