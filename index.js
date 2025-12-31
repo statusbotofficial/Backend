@@ -365,21 +365,19 @@ app.post("/api/guild/:guildId/status/set", (req, res) => {
             return res.status(400).json({ error: "Invalid user ID format" });
         }
         
-        // Load current guild settings
-        let settings = loadGuildSettings();
-        
-        // Update status_tracking exactly like the bot command does
-        settings[guildId] = settings[guildId] || {};
-        settings[guildId].status_tracking = {
+        // Update global guildSettings
+        guildSettings[guildId] = guildSettings[guildId] || {};
+        guildSettings[guildId].status_tracking = {
             user_id: user_id,
             delay: parseInt(delay) || 0,
             default_offline_message: default_offline_message || null
         };
         
-        // Save to guild_settings.json (bot reads this)
-        saveGuildSettings(settings);
+        // Save to guild_settings.json (bot reads this via API)
+        saveGuildSettings(guildSettings);
         
-        console.log(`Set user ${user_id} for guild ${guildId}`);
+        console.log(`[STATUS SET] User ${user_id} for guild ${guildId}`);
+        console.log(`[STATUS SET] Saved settings:`, guildSettings[guildId]);
         res.json({ success: true, message: "User tracking set" });
     } catch (err) {
         console.error("Error setting user tracking:", err);
@@ -447,16 +445,15 @@ app.post("/api/guild/:guildId/status/reset", (req, res) => {
         const { guildId } = req.params;
         
         // Clear all status tracking settings for a clean start
-        let settings = loadGuildSettings();
-        if (settings[guildId]) {
-            delete settings[guildId].status_tracking;
-            delete settings[guildId].status_track_config;
-            delete settings[guildId].status_override;
+        if (guildSettings[guildId]) {
+            delete guildSettings[guildId].status_tracking;
+            delete guildSettings[guildId].status_track_config;
+            delete guildSettings[guildId].status_override;
         }
         
-        saveGuildSettings(settings);
+        saveGuildSettings(guildSettings);
         
-        console.log(`Reset status settings for guild ${guildId}`);
+        console.log(`[STATUS RESET] Cleared all status settings for guild ${guildId}`);
         res.json({ success: true, message: "Status settings cleared" });
     } catch (err) {
         console.error("Error resetting status:", err);
