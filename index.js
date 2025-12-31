@@ -14,6 +14,7 @@ if (!fs.existsSync(DATA_DIR)) {
 
 const GUILD_DATA_FILE = path.join(DATA_DIR, "guild_data.json");
 const GUILD_SETTINGS_FILE = path.join(DATA_DIR, "guild_settings.json");
+const TRACKED_USERS_FILE = path.join(DATA_DIR, "tracked_users.json");
 
 // Helper functions for file-based persistence
 function loadGuildData() {
@@ -51,6 +52,25 @@ function saveGuildSettings(data) {
         fs.writeFileSync(GUILD_SETTINGS_FILE, JSON.stringify(data, null, 2));
     } catch (err) {
         console.error("Error saving guild settings:", err);
+    }
+}
+
+function loadTrackedUsers() {
+    try {
+        if (fs.existsSync(TRACKED_USERS_FILE)) {
+            return JSON.parse(fs.readFileSync(TRACKED_USERS_FILE, "utf-8"));
+        }
+    } catch (err) {
+        console.error("Error loading tracked users:", err);
+    }
+    return {};
+}
+
+function saveTrackedUsers(data) {
+    try {
+        fs.writeFileSync(TRACKED_USERS_FILE, JSON.stringify(data, null, 2));
+    } catch (err) {
+        console.error("Error saving tracked users:", err);
     }
 }
 
@@ -345,8 +365,7 @@ app.post("/api/guild/:guildId/status/set", (req, res) => {
             return res.status(400).json({ error: "Invalid user ID format" });
         }
         
-        // Create a request to the bot to set tracking
-        // For now, we'll store it and the bot will handle it via api.py
+        // Save to guild settings for website use
         guildSettings[guildId] = guildSettings[guildId] || {};
         guildSettings[guildId].status_tracking = {
             user_id: user_id,
@@ -354,8 +373,16 @@ app.post("/api/guild/:guildId/status/set", (req, res) => {
             default_offline_message: default_offline_message || null,
             updated_at: new Date().toISOString()
         };
-        
         saveGuildSettings(guildSettings);
+        
+        // Also save to tracked_users.json for bot compatibility
+        const trackedUsers = loadTrackedUsers();
+        trackedUsers[guildId] = {
+            user: parseInt(user_id),
+            delay: parseInt(delay) || 0,
+            default_offline_message: default_offline_message || null
+        };
+        saveTrackedUsers(trackedUsers);
         
         res.json({ success: true, message: "User tracking set" });
     } catch (err) {
@@ -431,6 +458,13 @@ app.post("/api/guild/:guildId/status/reset", (req, res) => {
         }
         
         saveGuildSettings(guildSettings);
+        
+        // Also remove from tracked_users.json for bot compatibility
+        const trackedUsers = loadTrackedUsers();
+        if (trackedUsers[guildId]) {
+            delete trackedUsers[guildId];
+            saveTrackedUsers(trackedUsers);
+        }
         
         res.json({ success: true, message: "Status settings cleared" });
     } catch (err) {
