@@ -328,10 +328,21 @@ app.post("/api/guild/:guildId/settings", (req, res) => {
 app.post("/api/guild/:guildId/status/set", (req, res) => {
     try {
         const { guildId } = req.params;
-        const { user_id, delay, default_offline_message } = req.body;
+        let { user_id, delay, default_offline_message } = req.body;
         
         if (!user_id) {
             return res.status(400).json({ error: "User ID is required" });
+        }
+        
+        // Parse user ID from mention format <@123456> if needed
+        const mentionMatch = user_id.match(/<@!?(\d+)>/);
+        if (mentionMatch) {
+            user_id = mentionMatch[1];
+        }
+        
+        // Validate that user_id is numeric
+        if (!/^\d+$/.test(user_id)) {
+            return res.status(400).json({ error: "Invalid user ID format" });
         }
         
         // Create a request to the bot to set tracking
