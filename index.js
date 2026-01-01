@@ -266,11 +266,18 @@ app.get("/api/guild/:guildId/leaderboard/messages", (req, res) => {
     const data = guildData[guildId] || {};
     const xpUsers = data.xp_leaderboard || [];
     
-    // Extract message count from users
+    console.log(`[MESSAGES] Guild ${guildId}: xpUsers count = ${xpUsers.length}`);
+    if (xpUsers.length > 0) {
+        console.log(`[MESSAGES] First user:`, JSON.stringify(xpUsers[0]));
+    }
+    
+    // Extract message count from users (check multiple field names)
     const messageUsers = xpUsers.map(user => ({
         ...user,
-        value: user.messages || 0
+        value: user.message_count || user.messages || 0
     })).sort((a, b) => b.value - a.value);
+    
+    console.log(`[MESSAGES] After mapping - first user value:`, messageUsers.length > 0 ? messageUsers[0].value : 'N/A');
     
     res.json({
         guildId,
@@ -313,6 +320,156 @@ app.post("/api/guild/:guildId/settings", (req, res) => {
     } catch (err) {
         console.error("Error saving settings:", err);
         res.status(500).json({ error: "Failed to save settings" });
+    }
+});
+
+// Status Tracking Endpoints
+// Set user to track
+app.post("/api/guild/:guildId/status/set", (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { user_id, delay, default_offline_message } = req.body;
+        
+        if (!user_id) {
+            return res.status(400).json({ error: "User ID is required" });
+        }
+        
+        // Create a request to the bot to set tracking
+        // For now, we'll store it and the bot will handle it via api.py
+        guildSettings[guildId] = guildSettings[guildId] || {};
+        guildSettings[guildId].status_tracking = {
+            user_id: user_id,
+            delay: parseInt(delay) || 0,
+            default_offline_message: default_offline_message || null,
+            updated_at: new Date().toISOString()
+        };
+        
+        saveGuildSettings(guildSettings);
+        
+        res.json({ success: true, message: "User tracking set" });
+    } catch (err) {
+        console.error("Error setting user tracking:", err);
+        res.status(500).json({ error: "Failed to set user tracking" });
+    }
+});
+
+// Start tracking (send message to channel)
+app.post("/api/guild/:guildId/status/track", (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { channel_id, automatic, embed } = req.body;
+        
+        if (!channel_id) {
+            return res.status(400).json({ error: "Channel ID is required" });
+        }
+        
+        guildSettings[guildId] = guildSettings[guildId] || {};
+        guildSettings[guildId].status_track_config = {
+            channel_id: channel_id,
+            automatic: automatic === 'yes',
+            embed: embed === 'yes',
+            updated_at: new Date().toISOString()
+        };
+        
+        saveGuildSettings(guildSettings);
+        
+        res.json({ success: true, message: "Tracking configuration saved" });
+    } catch (err) {
+        console.error("Error configuring tracking:", err);
+        res.status(500).json({ error: "Failed to configure tracking" });
+    }
+});
+
+// Update status manually
+app.post("/api/guild/:guildId/status/update", (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { status, reason } = req.body;
+        
+        if (!status || !['online', 'offline', 'maintenance'].includes(status)) {
+            return res.status(400).json({ error: "Invalid status" });
+        }
+        
+        guildSettings[guildId] = guildSettings[guildId] || {};
+        guildSettings[guildId].status_override = {
+            status: status,
+            reason: reason || null,
+            manual: true,
+            updated_at: new Date().toISOString()
+        };
+        
+        saveGuildSettings(guildSettings);
+        
+        res.json({ success: true, message: "Status updated" });
+    } catch (err) {
+        console.error("Error updating status:", err);
+        res.status(500).json({ error: "Failed to update status" });
+    }
+});
+
+// Reset status to automatic
+app.post("/api/guild/:guildId/status/reset", (req, res) => {
+    try {
+        const { guildId } = req.params;
+        
+        // Wipe all status tracking settings for a fresh start
+        if (guildSettings[guildId]) {
+            delete guildSettings[guildId].status_tracking;
+            delete guildSettings[guildId].status_track_config;
+            delete guildSettings[guildId].status_override;
+        }
+        
+        saveGuildSettings(guildSettings);
+        
+        res.json({ success: true, message: "Status settings cleared" });
+    } catch (err) {
+        console.error("Error resetting status:", err);
+        res.status(500).json({ error: "Failed to reset status" });
+    }
+});
+
+// Get guild channels
+app.get("/api/guild/:guildId/channels", (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const guildData = loadGuildData();
+        
+        if (!guildData[guildId] || !guildData[guildId].channels) {
+            return res.json({ channels: [] });
+        }
+        
+        const channels = guildData[guildId].channels.map(channel => ({
+            id: channel.id,
+            name: channel.name,
+            type: channel.type
+        })).sort((a, b) => a.name.localeCompare(b.name));
+        
+        res.json({ channels });
+    } catch (err) {
+        console.error("Error fetching guild channels:", err);
+        res.status(500).json({ error: "Failed to fetch channels" });
+    }
+});
+
+// Update guild channels (bot endpoint)
+app.post("/api/guild/:guildId/channels", (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { channels } = req.body;
+        
+        if (!Array.isArray(channels)) {
+            return res.status(400).json({ error: "Channels must be an array" });
+        }
+        
+        const guildData = loadGuildData();
+        guildData[guildId] = guildData[guildId] || {};
+        guildData[guildId].channels = channels;
+        saveGuildData(guildData);
+        
+        res.json({ success: true, message: "Channels updated" });
+    } catch (err) {
+        console.error("Error updating guild channels:", err);
+        res.status(500).json({ error: "Failed to update channels" });
     }
 });
 
