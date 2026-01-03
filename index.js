@@ -398,7 +398,33 @@ app.get("/api/economy/:guildId/settings", (req, res) => {
         global.economySettings = {};
     }
 
-    // Return stored settings or defaults if not stored
+    // Try to load from economy_data.json file first
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const economyFilePath = path.join(__dirname, 'economy_data.json');
+        
+        if (fs.existsSync(economyFilePath)) {
+            const fileContent = fs.readFileSync(economyFilePath, 'utf8');
+            const economyData = JSON.parse(fileContent);
+            
+            if (economyData.settings && economyData.settings[guildId]) {
+                const botSettings = economyData.settings[guildId];
+                // Convert bot format to API format
+                const settings = {
+                    enabled: botSettings.enabled || false,
+                    per_message: botSettings.per_message || 10,
+                    currency_symbol: botSettings.currency || "💰",
+                    starting_amount: botSettings.start || 500
+                };
+                return res.json(settings);
+            }
+        }
+    } catch (err) {
+        console.error('Error reading economy_data.json:', err);
+    }
+
+    // Return defaults if file not found or guild not configured
     const defaultSettings = {
         enabled: false,
         per_message: 10,
@@ -427,7 +453,7 @@ app.post("/api/economy/:guildId/settings", (req, res) => {
         return res.status(400).json({ error: "guildId is required" });
     }
 
-    // Store settings in memory (in production, use a database)
+    // Store settings in memory
     if (!global.economySettings) {
         global.economySettings = {};
     }
@@ -439,6 +465,40 @@ app.post("/api/economy/:guildId/settings", (req, res) => {
         starting_amount: starting_amount || 500,
         lastUpdated: new Date().toISOString()
     };
+
+    // Also save to economy_data.json file with the correct key format for the bot
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        
+        // Try to read existing economy_data.json
+        let economyData = { balances: {}, settings: {} };
+        const economyFilePath = path.join(__dirname, 'economy_data.json');
+        
+        try {
+            if (fs.existsSync(economyFilePath)) {
+                const fileContent = fs.readFileSync(economyFilePath, 'utf8');
+                economyData = JSON.parse(fileContent);
+            }
+        } catch (err) {
+            console.log('Creating new economy_data.json file');
+        }
+        
+        // Update settings with the correct key names for the bot
+        economyData.settings[guildId] = {
+            currency: currency_symbol || "💰",
+            start: starting_amount || 500,
+            per_message: per_message || 10,
+            enabled: enabled || false
+        };
+        
+        // Save to file
+        fs.writeFileSync(economyFilePath, JSON.stringify(economyData, null, 4));
+        console.log(`✅ Economy settings saved to file for guild ${guildId}`);
+    } catch (err) {
+        console.error('Error saving economy settings to file:', err);
+        // Don't fail the response, just log the error
+    }
 
     res.json({ 
         success: true, 
