@@ -73,7 +73,7 @@ app.use(cors({
         "https://www.status-bot.xyz"
     ],
     methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type"]
+    allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
 app.use(express.json({ limit: "1mb" }));
@@ -128,14 +128,21 @@ app.get("/", (_, res) => {
 });
 
 // Endpoint for bot to POST stats
-app.post("/api/bot-stats/update", express.json(), (req, res) => {
-    const { servers, ping } = req.body;
-    const SECRET_KEY = process.env.BOT_STATS_SECRET || "your-secret-key";
+app.post("/api/bot-stats/update", (req, res) => {
+    console.log("📥 POST request received at /api/bot-stats/update");
+    console.log("Headers:", req.headers);
+    console.log("Body:", req.body);
+    
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
     
     // Verify the request is from your bot
-    if (req.headers['authorization'] !== `Bearer ${SECRET_KEY}`) {
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        console.log(`❌ Unauthorized: Expected 'Bearer ${SECRET_KEY}', got '${authHeader}'`);
         return res.status(401).json({ error: "Unauthorized" });
     }
+
+    const { servers, ping } = req.body;
 
     botStats = {
         servers: servers || 0,
@@ -144,6 +151,7 @@ app.post("/api/bot-stats/update", express.json(), (req, res) => {
         lastUpdated: new Date().toISOString()
     };
 
+    console.log(`✅ Stats updated: ${servers} servers, ${ping}ms ping`);
     res.json({ success: true, message: "Stats updated" });
 });
 
