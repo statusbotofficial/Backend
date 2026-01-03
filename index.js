@@ -129,16 +129,11 @@ app.get("/", (_, res) => {
 
 // Endpoint for bot to POST stats
 app.post("/api/bot-stats/update", (req, res) => {
-    console.log("📥 POST request received at /api/bot-stats/update");
-    console.log("Headers:", req.headers);
-    console.log("Body:", req.body);
-    
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
     
     // Verify the request is from your bot
     if (authHeader !== `Bearer ${SECRET_KEY}`) {
-        console.log(`❌ Unauthorized: Expected 'Bearer ${SECRET_KEY}', got '${authHeader}'`);
         return res.status(401).json({ error: "Unauthorized" });
     }
 
@@ -151,7 +146,6 @@ app.post("/api/bot-stats/update", (req, res) => {
         lastUpdated: new Date().toISOString()
     };
 
-    console.log(`✅ Stats updated: ${servers} servers, ${ping}ms ping`);
     res.json({ success: true, message: "Stats updated" });
 });
 
