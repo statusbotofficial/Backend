@@ -12,6 +12,14 @@ if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
+// Bot stats storage
+let botStats = {
+    servers: 0,
+    ping: 0,
+    status: "offline",
+    lastUpdated: null
+};
+
 const SYSTEM_PROMPT = `
 You are the official AI support assistant for the Status Bot Discord bot.
 
@@ -119,64 +127,29 @@ app.get("/", (_, res) => {
     res.send("Status Bot Support API is running.");
 });
 
-// Bot stats endpoint - fetches from Discord bot hosted on Discloud
-app.get("/api/bot-stats", async (req, res) => {
-    try {
-        const DISCORD_CLIENT_ID = "1436123870158520411";
-        
-        // Fetch bot info from Discord API
-        const response = await fetch(`https://discord.com/api/v10/applications/${DISCORD_CLIENT_ID}`, {
-            headers: {
-                'Authorization': `Bot ${process.env.DISCORD_BOT_TOKEN}`
-            }
-        });
-
-        if (!response.ok) {
-            return res.status(500).json({
-                servers: "N/A",
-                ping: "N/A",
-                status: "offline"
-            });
-        }
-
-        const botData = await response.json();
-        
-        // Get guild count from bot
-        const guildResponse = await fetch(`https://discord.com/api/v10/users/@me/guilds`, {
-            headers: {
-                'Authorization': `Bot ${process.env.DISCORD_BOT_TOKEN}`
-            }
-        });
-
-        let serverCount = "N/A";
-        if (guildResponse.ok) {
-            const guilds = await guildResponse.json();
-            serverCount = guilds.length;
-        }
-
-        // Calculate ping (latency to Discord API)
-        const startTime = Date.now();
-        await fetch(`https://discord.com/api/v10/gateway`, {
-            headers: {
-                'Authorization': `Bot ${process.env.DISCORD_BOT_TOKEN}`
-            }
-        });
-        const ping = Date.now() - startTime;
-
-        res.json({
-            servers: serverCount,
-            ping: ping,
-            status: "online"
-        });
-
-    } catch (err) {
-        console.error("Bot stats error:", err);
-        res.status(500).json({
-            servers: "N/A",
-            ping: "N/A",
-            status: "offline"
-        });
+// Endpoint for bot to POST stats
+app.post("/api/bot-stats/update", express.json(), (req, res) => {
+    const { servers, ping } = req.body;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "your-secret-key";
+    
+    // Verify the request is from your bot
+    if (req.headers['authorization'] !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
     }
+
+    botStats = {
+        servers: servers || 0,
+        ping: ping || 0,
+        status: "online",
+        lastUpdated: new Date().toISOString()
+    };
+
+    res.json({ success: true, message: "Stats updated" });
+});
+
+// Endpoint for frontend to GET stats
+app.get("/api/bot-stats", (_, res) => {
+    res.json(botStats);
 });
 
 const PORT = process.env.PORT || 3000;
