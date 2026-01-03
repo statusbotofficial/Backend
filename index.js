@@ -46,8 +46,10 @@ KNOWN INFORMATION:
 - <a href="https://status-bot.xyz/premium">Premium page</a>
 - <a href="https://status-bot.xyz/support">Support page</a>
 - <a href="https://status-bot.xyz/status">Status page</a>
+- <a href="https://status-bot.xyz/servers">Dashboard</a>
 - <a href="https://status-bot.xyz/terms">Terms & Conditons</a>
 - <a href="https://status-bot.xyz/privacy">Privacy policy</a>
+- Dashboard is where the bot can be setup or change settings
 
 PRIMARY SUPPORT:
 Most help is provided through the Discord support server.
