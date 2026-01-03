@@ -400,8 +400,6 @@ app.get("/api/economy/:guildId/settings", (req, res) => {
 
     // Try to load from economy_data.json file first
     try {
-        const fs = require('fs');
-        const path = require('path');
         const economyFilePath = path.join(__dirname, 'economy_data.json');
         
         if (fs.existsSync(economyFilePath)) {
@@ -468,9 +466,6 @@ app.post("/api/economy/:guildId/settings", (req, res) => {
 
     // Also save to economy_data.json file with the correct key format for the bot
     try {
-        const fs = require('fs');
-        const path = require('path');
-        
         // Try to read existing economy_data.json
         let economyData = { balances: {}, settings: {}, user_metadata: {} };
         const economyFilePath = path.join(__dirname, 'economy_data.json');
