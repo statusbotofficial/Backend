@@ -23,6 +23,9 @@ let botStats = {
 // Server data storage (members, premium status, tracked users, leaderboards)
 let serverData = {};
 
+// Server channels storage
+let serverChannels = {};
+
 const SYSTEM_PROMPT = `
 You are the official AI support assistant for the Status Bot Discord bot.
 
@@ -243,6 +246,49 @@ app.post("/api/server-data/update", (req, res) => {
     };
 
     res.json({ success: true, message: "Server data updated" });
+});
+
+// ============ CHANNEL ENDPOINTS ============
+
+// Get channels for a guild
+app.get("/api/channels/:guildId", (req, res) => {
+    const { guildId } = req.params;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const channels = serverChannels[guildId] || [];
+    res.json({ guildId, channels });
+});
+
+// Update channels for a guild (bot sends this)
+app.post("/api/channels/:guildId", (req, res) => {
+    const { guildId } = req.params;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { channels } = req.body;
+
+    if (!guildId) {
+        return res.status(400).json({ error: "guildId is required" });
+    }
+
+    serverChannels[guildId] = channels || [];
+
+    res.json({ 
+        success: true, 
+        message: "Channels updated",
+        channels: serverChannels[guildId]
+    });
 });
 
 // ============ LEVELING SYSTEM ENDPOINTS ============
