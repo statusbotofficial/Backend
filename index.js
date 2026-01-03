@@ -151,6 +151,23 @@ app.get("/api/bot-stats", (req, res) => {
     res.json(botStats);
 });
 
+app.post("/api/bot-guilds", (req, res) => {
+    try {
+        const { guilds } = req.body;
+        
+        if (Array.isArray(guilds)) {
+            botGuilds = guilds;
+            console.log(`✓ Bot guilds updated: ${guilds.length} guilds`);
+            res.json({ success: true, count: guilds.length });
+        } else {
+            res.status(400).json({ error: "Guilds must be an array" });
+        }
+    } catch (err) {
+        console.error("Guild update error:", err);
+        res.status(500).json({ error: "Failed to update guilds" });
+    }
+});
+
 app.get("/api/bot-guilds", (req, res) => {
     res.json({ guilds: botGuilds });
 });
