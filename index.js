@@ -315,6 +315,54 @@ app.get("/api/guild/:guildId/settings", (req, res) => {
     });
 });
 
+// Get leveling settings
+app.get("/api/guild/:guildId/leveling/settings", (req, res) => {
+    const { guildId } = req.params;
+    const settings = guildSettings[guildId]?.leveling || {};
+    
+    res.json({
+        guildId,
+        ...settings
+    });
+});
+
+// Save leveling settings
+app.post("/api/guild/:guildId/leveling/settings", (req, res) => {
+    try {
+        const { guildId } = req.params;
+        const { enabled, xp_per_message, vc_xp_per_minute, level_up_channel } = req.body;
+        
+        guildSettings[guildId] = guildSettings[guildId] || {};
+        guildSettings[guildId].leveling = {
+            enabled: enabled || false,
+            xp_per_message: xp_per_message || 10,
+            vc_xp_per_minute: vc_xp_per_minute || 5,
+            level_up_channel: level_up_channel || null,
+            updated_at: new Date().toISOString()
+        };
+        
+        saveGuildSettings(guildSettings);
+        
+        res.json({ success: true, settings: guildSettings[guildId].leveling });
+    } catch (err) {
+        console.error("Error saving leveling settings:", err);
+        res.status(500).json({ error: "Failed to save leveling settings" });
+    }
+});
+
+// Get status settings
+app.get("/api/guild/:guildId/status/settings", (req, res) => {
+    const { guildId } = req.params;
+    const settings = guildSettings[guildId] || {};
+    
+    res.json({
+        guildId,
+        tracking: settings.status_tracking || {},
+        trackConfig: settings.status_track_config || {},
+        override: settings.status_override || {}
+    });
+});
+
 // Save guild settings
 app.post("/api/guild/:guildId/settings", (req, res) => {
     try {
