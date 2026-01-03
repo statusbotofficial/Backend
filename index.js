@@ -304,7 +304,12 @@ app.get("/api/leveling/:guildId/settings", (req, res) => {
         return res.status(401).json({ error: "Unauthorized" });
     }
 
-    // Return default settings if not stored
+    // Initialize global storage if needed
+    if (!global.levelingSettings) {
+        global.levelingSettings = {};
+    }
+
+    // Return stored settings or defaults if not stored
     const defaultSettings = {
         enabled: false,
         xp_per_message: 10,
@@ -314,7 +319,8 @@ app.get("/api/leveling/:guildId/settings", (req, res) => {
         allowed_xp_channels: []
     };
 
-    res.json(defaultSettings);
+    const settings = global.levelingSettings[guildId] || defaultSettings;
+    res.json(settings);
 });
 
 // Save leveling settings for a guild
