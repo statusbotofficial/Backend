@@ -119,6 +119,66 @@ app.get("/", (_, res) => {
     res.send("Status Bot Support API is running.");
 });
 
+// Bot stats endpoint - fetches from Discord bot hosted on Discloud
+app.get("/api/bot-stats", async (req, res) => {
+    try {
+        const DISCORD_CLIENT_ID = "1436123870158520411";
+        
+        // Fetch bot info from Discord API
+        const response = await fetch(`https://discord.com/api/v10/applications/${DISCORD_CLIENT_ID}`, {
+            headers: {
+                'Authorization': `Bot ${process.env.DISCORD_BOT_TOKEN}`
+            }
+        });
+
+        if (!response.ok) {
+            return res.status(500).json({
+                servers: "N/A",
+                ping: "N/A",
+                status: "offline"
+            });
+        }
+
+        const botData = await response.json();
+        
+        // Get guild count from bot
+        const guildResponse = await fetch(`https://discord.com/api/v10/users/@me/guilds`, {
+            headers: {
+                'Authorization': `Bot ${process.env.DISCORD_BOT_TOKEN}`
+            }
+        });
+
+        let serverCount = "N/A";
+        if (guildResponse.ok) {
+            const guilds = await guildResponse.json();
+            serverCount = guilds.length;
+        }
+
+        // Calculate ping (latency to Discord API)
+        const startTime = Date.now();
+        await fetch(`https://discord.com/api/v10/gateway`, {
+            headers: {
+                'Authorization': `Bot ${process.env.DISCORD_BOT_TOKEN}`
+            }
+        });
+        const ping = Date.now() - startTime;
+
+        res.json({
+            servers: serverCount,
+            ping: ping,
+            status: "online"
+        });
+
+    } catch (err) {
+        console.error("Bot stats error:", err);
+        res.status(500).json({
+            servers: "N/A",
+            ping: "N/A",
+            status: "offline"
+        });
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
