@@ -472,13 +472,16 @@ app.post("/api/economy/:guildId/settings", (req, res) => {
         const path = require('path');
         
         // Try to read existing economy_data.json
-        let economyData = { balances: {}, settings: {} };
+        let economyData = { balances: {}, settings: {}, user_metadata: {} };
         const economyFilePath = path.join(__dirname, 'economy_data.json');
+        
+        console.log(`📝 Economy file path: ${economyFilePath}`);
         
         try {
             if (fs.existsSync(economyFilePath)) {
                 const fileContent = fs.readFileSync(economyFilePath, 'utf8');
                 economyData = JSON.parse(fileContent);
+                console.log(`📖 Loaded existing economy data`);
             }
         } catch (err) {
             console.log('Creating new economy_data.json file');
@@ -492,9 +495,12 @@ app.post("/api/economy/:guildId/settings", (req, res) => {
             enabled: enabled || false
         };
         
+        console.log(`💾 Saving economy settings for guild ${guildId}:`, economyData.settings[guildId]);
+        
         // Save to file
         fs.writeFileSync(economyFilePath, JSON.stringify(economyData, null, 4));
         console.log(`✅ Economy settings saved to file for guild ${guildId}`);
+        console.log(`📌 Starting amount set to: ${starting_amount}`);
     } catch (err) {
         console.error('Error saving economy settings to file:', err);
         // Don't fail the response, just log the error
