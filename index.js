@@ -382,6 +382,71 @@ app.get("/api/leveling/:guildId/leaderboard", (req, res) => {
     });
 });
 
+// Get economy settings for a guild
+app.get("/api/economy/:guildId/settings", (req, res) => {
+    const { guildId } = req.params;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    // Initialize global storage if needed
+    if (!global.economySettings) {
+        global.economySettings = {};
+    }
+
+    // Return stored settings or defaults if not stored
+    const defaultSettings = {
+        enabled: false,
+        per_message: 10,
+        currency_symbol: "💰",
+        starting_amount: 500
+    };
+
+    const settings = global.economySettings[guildId] || defaultSettings;
+    res.json(settings);
+});
+
+// Save economy settings for a guild
+app.post("/api/economy/:guildId/settings", (req, res) => {
+    const { guildId } = req.params;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { enabled, per_message, currency_symbol, starting_amount } = req.body;
+
+    if (!guildId) {
+        return res.status(400).json({ error: "guildId is required" });
+    }
+
+    // Store settings in memory (in production, use a database)
+    if (!global.economySettings) {
+        global.economySettings = {};
+    }
+
+    global.economySettings[guildId] = {
+        enabled: enabled || false,
+        per_message: per_message || 10,
+        currency_symbol: currency_symbol || "💰",
+        starting_amount: starting_amount || 500,
+        lastUpdated: new Date().toISOString()
+    };
+
+    res.json({ 
+        success: true, 
+        message: "Economy settings saved", 
+        settings: global.economySettings[guildId] 
+    });
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
