@@ -245,6 +245,91 @@ app.post("/api/server-data/update", (req, res) => {
     res.json({ success: true, message: "Server data updated" });
 });
 
+// ============ LEVELING SYSTEM ENDPOINTS ============
+
+// Get leveling settings for a guild
+app.get("/api/leveling/:guildId/settings", (req, res) => {
+    const { guildId } = req.params;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    // Return default settings if not stored
+    const defaultSettings = {
+        enabled: false,
+        xp_per_message: 10,
+        vc_xp_per_minute: 2,
+        level_up_message: "🎉 {user} has reached Level **{level}**!",
+        level_up_channel: null,
+        allowed_xp_channels: []
+    };
+
+    res.json(defaultSettings);
+});
+
+// Save leveling settings for a guild
+app.post("/api/leveling/:guildId/settings", (req, res) => {
+    const { guildId } = req.params;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { enabled, xp_per_message, vc_xp_per_minute, level_up_message, level_up_channel, allowed_xp_channels } = req.body;
+
+    if (!guildId) {
+        return res.status(400).json({ error: "guildId is required" });
+    }
+
+    // Store settings in memory (in production, use a database)
+    if (!global.levelingSettings) {
+        global.levelingSettings = {};
+    }
+
+    global.levelingSettings[guildId] = {
+        enabled: enabled || false,
+        xp_per_message: xp_per_message || 10,
+        vc_xp_per_minute: vc_xp_per_minute || 2,
+        level_up_message: level_up_message || "🎉 {user} has reached Level **{level}**!",
+        level_up_channel: level_up_channel || null,
+        allowed_xp_channels: allowed_xp_channels || [],
+        lastUpdated: new Date().toISOString()
+    };
+
+    res.json({ 
+        success: true, 
+        message: "Leveling settings saved", 
+        settings: global.levelingSettings[guildId] 
+    });
+});
+
+// Get leveling leaderboard for a guild
+app.get("/api/leveling/:guildId/leaderboard", (req, res) => {
+    const { guildId } = req.params;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    // Return leaderboard data stored in serverData
+    const leaderboard = serverData[guildId]?.allUsers || [];
+
+    res.json({ 
+        guildId,
+        users: leaderboard
+    });
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
