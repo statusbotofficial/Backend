@@ -20,6 +20,9 @@ let botStats = {
     lastUpdated: null
 };
 
+// Server data storage (members, premium status, tracked users, leaderboards)
+let serverData = {};
+
 const SYSTEM_PROMPT = `
 You are the official AI support assistant for the Status Bot Discord bot.
 
@@ -162,6 +165,61 @@ app.get("/api/bot-guilds", (req, res) => {
     res.json({ 
         guilds: botStats.guildIds || []
     });
+});
+
+// Endpoint to get server overview data
+app.get("/api/server-overview/:guildId", (req, res) => {
+    const { guildId } = req.params;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}` && !req.query.token) {
+        // For now, return mock data if not authorized - in production, verify Discord token
+        const mockData = serverData[guildId] || {
+            memberCount: 0,
+            isPremium: false,
+            trackedUser: null,
+            topUsers: []
+        };
+        return res.json(mockData);
+    }
+
+    const overview = serverData[guildId] || {
+        memberCount: 0,
+        isPremium: false,
+        trackedUser: null,
+        topUsers: []
+    };
+
+    res.json(overview);
+});
+
+// Endpoint for bot to POST server data
+app.post("/api/server-data/update", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify the request is from your bot
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { guildId, memberCount, isPremium, trackedUser, topUsers } = req.body;
+
+    if (!guildId) {
+        return res.status(400).json({ error: "guildId is required" });
+    }
+
+    serverData[guildId] = {
+        memberCount: memberCount || 0,
+        isPremium: isPremium || false,
+        trackedUser: trackedUser || null,
+        topUsers: topUsers || [],
+        lastUpdated: new Date().toISOString()
+    };
+
+    res.json({ success: true, message: "Server data updated" });
 });
 
 const PORT = process.env.PORT || 3000;
