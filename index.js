@@ -195,6 +195,28 @@ app.get("/api/server-overview/:guildId", (req, res) => {
     res.json(overview);
 });
 
+// Endpoint to get full server leaderboard
+app.get("/api/server-leaderboard/:guildId", (req, res) => {
+    const { guildId } = req.params;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}` && !req.query.token) {
+        // For now, return mock data if not authorized
+        const mockData = serverData[guildId] || {
+            allUsers: []
+        };
+        return res.json(mockData);
+    }
+
+    const leaderboard = serverData[guildId] || {
+        allUsers: []
+    };
+
+    res.json(leaderboard);
+});
+
 // Endpoint for bot to POST server data
 app.post("/api/server-data/update", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
@@ -205,7 +227,7 @@ app.post("/api/server-data/update", (req, res) => {
         return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { guildId, memberCount, isPremium, trackedUser, topUsers } = req.body;
+    const { guildId, memberCount, isPremium, trackedUser, topUsers, allUsers } = req.body;
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
@@ -216,6 +238,7 @@ app.post("/api/server-data/update", (req, res) => {
         isPremium: isPremium || false,
         trackedUser: trackedUser || null,
         topUsers: topUsers || [],
+        allUsers: allUsers || [],
         lastUpdated: new Date().toISOString()
     };
 
