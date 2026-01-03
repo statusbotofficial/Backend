@@ -137,12 +137,13 @@ app.post("/api/bot-stats/update", (req, res) => {
         return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { servers, ping } = req.body;
+    const { servers, ping, guildIds } = req.body;
 
     botStats = {
         servers: servers || 0,
         ping: ping || 0,
         status: "online",
+        guildIds: guildIds || [],
         lastUpdated: new Date().toISOString()
     };
 
@@ -152,6 +153,15 @@ app.post("/api/bot-stats/update", (req, res) => {
 // Endpoint for frontend to GET stats
 app.get("/api/bot-stats", (_, res) => {
     res.json(botStats);
+});
+
+// Endpoint to get all bot guilds
+app.get("/api/bot-guilds", (req, res) => {
+    // This endpoint returns the list of servers the bot is in
+    // The actual guild data is updated by the bot via the stats endpoint
+    res.json({ 
+        guilds: botStats.guildIds || []
+    });
 });
 
 const PORT = process.env.PORT || 3000;
