@@ -752,6 +752,8 @@ app.post("/api/status/:guildId/settings", (req, res) => {
         const oldSettings = statusData.settings[guildId] || {};
         const oldMessageId = oldSettings.message_id;
         const oldChannelId = oldSettings.channel_id;
+        
+        console.log(`📋 Retrieved old settings for guild ${guildId}: messageId="${oldMessageId}", channelId="${oldChannelId}"`);
 
         // Update settings - completely replace with new settings
         statusData.settings[guildId] = {
@@ -846,11 +848,14 @@ app.post("/api/status/:guildId/message-id", (req, res) => {
         // Update the message ID for this guild
         if (statusData.settings[guildId]) {
             statusData.settings[guildId].message_id = messageId;
+            statusData.settings[guildId].last_message_timestamp = new Date().toISOString();
+        } else {
+            console.warn(`⚠️ Guild ${guildId} settings not found when storing message ID`);
         }
 
         // Save to file
         fs.writeFileSync(statusFilePath, JSON.stringify(statusData, null, 4));
-        console.log(`✅ Stored message ID ${messageId} for guild ${guildId}`);
+        console.log(`💾 Stored message ID ${messageId} for guild ${guildId}`);
 
         res.json({ 
             success: true, 
