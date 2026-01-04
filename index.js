@@ -799,6 +799,10 @@ app.post("/api/status/:guildId/settings", (req, res) => {
             } catch (err) {
                 console.log('Note: Could not queue message deletion');
             }
+        } else {
+            if (!oldMessageId) {
+                console.log('ℹ️ No previous message ID to delete (first post)');
+            }
         }
         
         console.log(`✅ Status tracking settings saved for guild ${guildId}`);
@@ -845,6 +849,11 @@ app.post("/api/status/:guildId/message-id", (req, res) => {
             console.log('Creating new status_data.json file');
         }
 
+        // Get the OLD message ID BEFORE storing the new one (if it exists and is different)
+        const oldSettings = statusData.settings[guildId] || {};
+        const oldMessageId = oldSettings.message_id;
+        const oldChannelId = oldSettings.channel_id;
+
         // Update the message ID for this guild
         if (statusData.settings[guildId]) {
             statusData.settings[guildId].message_id = messageId;
@@ -856,6 +865,36 @@ app.post("/api/status/:guildId/message-id", (req, res) => {
         // Save to file
         fs.writeFileSync(statusFilePath, JSON.stringify(statusData, null, 4));
         console.log(`💾 Stored message ID ${messageId} for guild ${guildId}`);
+
+        // Queue a delete action for the old message (if one exists and is different from new)
+        if (oldMessageId && oldMessageId !== "" && oldMessageId !== messageId && oldChannelId) {
+            try {
+                let pendingData = [];
+                const pendingPath = path.join(__dirname, 'pending_posts.json');
+                
+                try {
+                    if (fs.existsSync(pendingPath)) {
+                        pendingData = JSON.parse(fs.readFileSync(pendingPath, 'utf8'));
+                    }
+                } catch (err) {
+                    pendingData = [];
+                }
+                
+                // Add delete action at the BEGINNING so it processes first
+                if (Array.isArray(pendingData)) {
+                    pendingData.unshift({
+                        action: "delete",
+                        guildId: guildId,
+                        channelId: oldChannelId,
+                        messageId: oldMessageId
+                    });
+                    fs.writeFileSync(pendingPath, JSON.stringify(pendingData, null, 4));
+                    console.log(`🗑️ Queued deletion of old message ${oldMessageId} before new message ${messageId}`);
+                }
+            } catch (err) {
+                console.log('⚠️ Could not queue message deletion:', err.message);
+            }
+        }
 
         res.json({ 
             success: true, 
