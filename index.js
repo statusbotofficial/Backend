@@ -748,7 +748,7 @@ app.post("/api/status/:guildId/settings", (req, res) => {
             console.log('Creating new status_data.json file');
         }
 
-        // Update settings
+        // Update settings - completely replace with new settings
         statusData.settings[guildId] = {
             enabled: enabled || false,
             user_id: user_id || "",
@@ -759,8 +759,28 @@ app.post("/api/status/:guildId/settings", (req, res) => {
             use_embed: use_embed !== undefined ? use_embed : true
         };
 
-        // Save to file
+        // Save to file (overwrites previous settings completely)
         fs.writeFileSync(statusFilePath, JSON.stringify(statusData, null, 4));
+        
+        // Clear any pending posts for this guild when settings are updated
+        // (so old settings changes don't leave stale posts in queue)
+        try {
+            const pendingPath = path.join(__dirname, 'pending_posts.json');
+            if (fs.existsSync(pendingPath)) {
+                const pendingData = JSON.parse(fs.readFileSync(pendingPath, 'utf8'));
+                // Remove posts for this guild
+                if (Array.isArray(pendingData)) {
+                    const filtered = pendingData.filter(post => post.guildId !== guildId);
+                    fs.writeFileSync(pendingPath, JSON.stringify(filtered, null, 4));
+                    if (filtered.length < pendingData.length) {
+                        console.log(`✅ Cleared ${pendingData.length - filtered.length} pending posts for guild ${guildId}`);
+                    }
+                }
+            }
+        } catch (err) {
+            console.log('Note: Could not clear pending posts (may not exist yet)');
+        }
+        
         console.log(`✅ Status tracking settings saved for guild ${guildId}`);
 
         res.json({ 
