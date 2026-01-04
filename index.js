@@ -755,21 +755,7 @@ app.post("/api/status/:guildId/settings", (req, res) => {
         
         console.log(`📋 Retrieved old settings for guild ${guildId}: messageId="${oldMessageId}", channelId="${oldChannelId}"`);
 
-        // Update settings - completely replace with new settings
-        statusData.settings[guildId] = {
-            enabled: enabled || false,
-            user_id: user_id || "",
-            channel_id: channel_id || "",
-            delay_seconds: delay_seconds || "60",
-            offline_message: offline_message || "User is currently offline",
-            automatic: automatic !== undefined ? automatic : true,
-            use_embed: use_embed !== undefined ? use_embed : true,
-            message_id: "" // Clear the message ID so a new one will be posted
-        };
-
-        // Save to file (overwrites previous settings completely)
-        fs.writeFileSync(statusFilePath, JSON.stringify(statusData, null, 4));
-        
+        // QUEUE DELETION BEFORE CLEARING MESSAGE ID
         // Queue a delete action for the old message (if one exists)
         if (oldMessageId && oldChannelId) {
             try {
@@ -894,6 +880,8 @@ app.post("/api/status/:guildId/message-id", (req, res) => {
             } catch (err) {
                 console.log('⚠️ Could not queue message deletion:', err.message);
             }
+        } else {
+            console.log(`ℹ️ Not queueing delete - Conditions: oldMessageId=${!!oldMessageId}, isTrimmed=${oldMessageId && oldMessageId.trim && oldMessageId.trim() !== ""}, isDifferent=${oldMessageId !== messageId}, oldChannelId=${!!oldChannelId}`);
         }
 
         res.json({ 
