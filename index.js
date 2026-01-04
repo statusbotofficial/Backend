@@ -924,65 +924,6 @@ app.get("/api/status/pending-posts", (req, res) => {
     }
 });
 
-app.post("/api/status/pending-posts", (req, res) => {
-    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
-    const authHeader = req.headers['authorization'] || '';
-    
-    // Verify authorization
-    if (authHeader !== `Bearer ${SECRET_KEY}`) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    try {
-        const { action, guildId, channelId, messageId } = req.body;
-
-        // Validate required fields
-        if (!action || !guildId || !channelId || !messageId) {
-            return res.status(400).json({ error: "Missing required fields: action, guildId, channelId, messageId" });
-        }
-
-        let pendingPosts = { posts: [] };
-        const pendingPostsPath = path.join(__dirname, 'pending_posts.json');
-        
-        try {
-            if (fs.existsSync(pendingPostsPath)) {
-                const fileContent = fs.readFileSync(pendingPostsPath, 'utf8');
-                const parsed = JSON.parse(fileContent);
-                // Handle both array format and object format
-                if (Array.isArray(parsed)) {
-                    pendingPosts = { posts: parsed };
-                } else if (parsed && typeof parsed === 'object' && parsed.posts) {
-                    pendingPosts = parsed;
-                }
-            }
-        } catch (err) {
-            console.log('No pending posts file, creating new one');
-            pendingPosts = { posts: [] };
-        }
-
-        // Ensure posts array exists
-        if (!pendingPosts.posts) {
-            pendingPosts.posts = [];
-        }
-
-        // Add the action to pending posts
-        const newAction = {
-            action: action,
-            guildId: guildId,
-            channelId: channelId,
-            messageId: messageId
-        };
-        
-        pendingPosts.posts.push(newAction);
-        fs.writeFileSync(pendingPostsPath, JSON.stringify(pendingPosts, null, 4));
-
-        res.json({ success: true, message: "Action queued", action: newAction });
-    } catch (err) {
-        console.error('Error adding pending post:', err);
-        res.status(500).json({ error: "Failed to add pending post", details: err.message });
-    }
-});
-
 app.post("/api/status/pending-posts/remove/:index", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
