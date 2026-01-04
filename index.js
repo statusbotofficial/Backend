@@ -761,47 +761,45 @@ app.post("/api/status/:guildId/settings", (req, res) => {
         if (oldMessageId && oldMessageId !== "" && oldMessageId !== "undefined" && oldChannelId && oldChannelId !== "" && oldChannelId !== "undefined") {
             console.log(`🗑️ Attempting to queue deletion for message ${oldMessageId} in channel ${oldChannelId}`);
             try {
-                // Create a pending action to delete the old message
-                let pendingData = [];
+                // Load pending posts file with proper structure
+                let pendingPosts = { posts: [] };
                 const pendingPath = path.join(__dirname, 'pending_posts.json');
                 
-                console.log(`📂 Checking for pending_posts.json at ${pendingPath}`);
                 try {
                     if (fs.existsSync(pendingPath)) {
                         const fileContent = fs.readFileSync(pendingPath, 'utf8');
                         const parsed = JSON.parse(fileContent);
-                        // Ensure it's an array - if it's an object, convert to array
+                        // Handle both array format and object format
                         if (Array.isArray(parsed)) {
-                            pendingData = parsed;
-                            console.log(`📂 Read existing pending_posts.json as array, current length: ${pendingData.length}`);
-                        } else {
-                            console.log(`⚠️ pending_posts.json was an object, converting to array`);
-                            pendingData = [];
+                            pendingPosts = { posts: parsed };
+                            console.log(`📂 Converted array format to object format, length: ${pendingPosts.posts.length}`);
+                        } else if (parsed && typeof parsed === 'object' && parsed.posts) {
+                            pendingPosts = parsed;
+                            console.log(`📂 Read existing pending_posts.json, current length: ${pendingPosts.posts.length}`);
                         }
-                    } else {
-                        console.log(`📂 pending_posts.json does not exist, creating new array`);
-                        pendingData = [];
                     }
                 } catch (err) {
                     console.log(`⚠️ Error reading pending_posts.json: ${err.message}, starting fresh`);
-                    pendingData = [];
+                    pendingPosts = { posts: [] };
                 }
                 
-                // Add delete action
-                if (Array.isArray(pendingData)) {
-                    const deleteAction = {
-                        action: "delete",
-                        guildId: guildId,
-                        channelId: oldChannelId,
-                        messageId: oldMessageId
-                    };
-                    pendingData.push(deleteAction);
-                    console.log(`✅ Added delete action to array, new length: ${pendingData.length}`);
-                    fs.writeFileSync(pendingPath, JSON.stringify(pendingData, null, 4));
-                    console.log(`✅ Queued deletion of old message ${oldMessageId}`);
-                } else {
-                    console.log(`⚠️ Failed to create pendingData array!`);
+                // Ensure posts array exists
+                if (!pendingPosts.posts) {
+                    pendingPosts.posts = [];
                 }
+                
+                // Add delete action to the BEGINNING so it processes first (before new post)
+                const deleteAction = {
+                    action: "delete",
+                    guildId: guildId,
+                    channelId: oldChannelId,
+                    messageId: oldMessageId
+                };
+                pendingPosts.posts.unshift(deleteAction);
+                console.log(`✅ Added delete action to queue, new length: ${pendingPosts.posts.length}`);
+                
+                fs.writeFileSync(pendingPath, JSON.stringify(pendingPosts, null, 4));
+                console.log(`✅ Queued deletion of old message ${oldMessageId}`);
             } catch (err) {
                 console.log(`⚠️ Error in delete queueing: ${err.message}`);
                 console.error(err);
@@ -945,7 +943,13 @@ app.post("/api/status/pending-posts/remove/:index", (req, res) => {
         try {
             if (fs.existsSync(pendingPostsPath)) {
                 const fileContent = fs.readFileSync(pendingPostsPath, 'utf8');
-                pendingPosts = JSON.parse(fileContent);
+                const parsed = JSON.parse(fileContent);
+                // Handle both array format and object format
+                if (Array.isArray(parsed)) {
+                    pendingPosts = { posts: parsed };
+                } else if (parsed && typeof parsed === 'object' && parsed.posts) {
+                    pendingPosts = parsed;
+                }
             }
         } catch (err) {
             console.log('No pending posts file');
@@ -989,13 +993,25 @@ app.post("/api/status/:guildId/post", (req, res) => {
         try {
             if (fs.existsSync(pendingPostsPath)) {
                 const fileContent = fs.readFileSync(pendingPostsPath, 'utf8');
-                pendingPosts = JSON.parse(fileContent);
+                const parsed = JSON.parse(fileContent);
+                // Handle both array format (from delete queueing) and object format (from this endpoint)
+                if (Array.isArray(parsed)) {
+                    pendingPosts = { posts: parsed };
+                } else if (parsed && typeof parsed === 'object' && parsed.posts) {
+                    pendingPosts = parsed;
+                } else {
+                    pendingPosts = { posts: [] };
+                }
             }
         } catch (err) {
             console.log('Creating new pending_posts.json file');
+            pendingPosts = { posts: [] };
         }
 
-        // Add new post request
+        // Add new post request to posts array
+        if (!pendingPosts.posts) {
+            pendingPosts.posts = [];
+        }
         pendingPosts.posts.push({
             guildId: guildId,
             userId: user_id,
