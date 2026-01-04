@@ -769,13 +769,21 @@ app.post("/api/status/:guildId/settings", (req, res) => {
                 try {
                     if (fs.existsSync(pendingPath)) {
                         const fileContent = fs.readFileSync(pendingPath, 'utf8');
-                        pendingData = JSON.parse(fileContent);
-                        console.log(`📂 Read existing pending_posts.json, current array length: ${pendingData.length}`);
+                        const parsed = JSON.parse(fileContent);
+                        // Ensure it's an array - if it's an object, convert to array
+                        if (Array.isArray(parsed)) {
+                            pendingData = parsed;
+                            console.log(`📂 Read existing pending_posts.json as array, current length: ${pendingData.length}`);
+                        } else {
+                            console.log(`⚠️ pending_posts.json was an object, converting to array`);
+                            pendingData = [];
+                        }
                     } else {
                         console.log(`📂 pending_posts.json does not exist, creating new array`);
+                        pendingData = [];
                     }
                 } catch (err) {
-                    console.log(`⚠️ Error reading pending_posts.json: ${err.message}`);
+                    console.log(`⚠️ Error reading pending_posts.json: ${err.message}, starting fresh`);
                     pendingData = [];
                 }
                 
@@ -792,7 +800,7 @@ app.post("/api/status/:guildId/settings", (req, res) => {
                     fs.writeFileSync(pendingPath, JSON.stringify(pendingData, null, 4));
                     console.log(`✅ Queued deletion of old message ${oldMessageId}`);
                 } else {
-                    console.log(`⚠️ pendingData is not an array! Type: ${typeof pendingData}`);
+                    console.log(`⚠️ Failed to create pendingData array!`);
                 }
             } catch (err) {
                 console.log(`⚠️ Error in delete queueing: ${err.message}`);
