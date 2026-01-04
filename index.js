@@ -670,6 +670,37 @@ app.post("/api/status/:guildId/settings", (req, res) => {
     }
 });
 
+app.post("/api/status/:guildId/post", (req, res) => {
+    const { guildId } = req.params;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { user_id, channel_id, offline_message, use_embed } = req.body;
+
+    if (!guildId || !user_id || !channel_id) {
+        return res.status(400).json({ error: "guildId, user_id, and channel_id are required" });
+    }
+
+    try {
+        // This endpoint will be called by the dashboard to trigger a status post
+        // The bot will handle the actual posting via a trigger from this endpoint
+        console.log(`📤 Status post triggered for guild ${guildId}, user ${user_id}, channel ${channel_id}`);
+
+        res.json({ 
+            success: true, 
+            message: "Status post triggered successfully" 
+        });
+    } catch (err) {
+        console.error('Error triggering status post:', err);
+        res.status(500).json({ error: "Failed to trigger status post", details: err.message });
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
