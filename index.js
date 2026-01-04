@@ -670,6 +670,73 @@ app.post("/api/status/:guildId/settings", (req, res) => {
     }
 });
 
+app.get("/api/status/pending-posts", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        let pendingPosts = { posts: [] };
+        const pendingPostsPath = path.join(__dirname, 'pending_posts.json');
+        
+        try {
+            if (fs.existsSync(pendingPostsPath)) {
+                const fileContent = fs.readFileSync(pendingPostsPath, 'utf8');
+                pendingPosts = JSON.parse(fileContent);
+            }
+        } catch (err) {
+            console.log('No pending posts found');
+        }
+
+        res.json(pendingPosts);
+    } catch (err) {
+        console.error('Error fetching pending posts:', err);
+        res.status(500).json({ error: "Failed to fetch pending posts", details: err.message });
+    }
+});
+
+app.post("/api/status/pending-posts/remove/:index", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { index } = req.params;
+
+    try {
+        let pendingPosts = { posts: [] };
+        const pendingPostsPath = path.join(__dirname, 'pending_posts.json');
+        
+        try {
+            if (fs.existsSync(pendingPostsPath)) {
+                const fileContent = fs.readFileSync(pendingPostsPath, 'utf8');
+                pendingPosts = JSON.parse(fileContent);
+            }
+        } catch (err) {
+            console.log('No pending posts file');
+        }
+
+        // Remove the post at the given index
+        if (index >= 0 && index < pendingPosts.posts.length) {
+            pendingPosts.posts.splice(parseInt(index), 1);
+            fs.writeFileSync(pendingPostsPath, JSON.stringify(pendingPosts, null, 4));
+            console.log(`✅ Removed pending post at index ${index}`);
+        }
+
+        res.json({ success: true, message: "Post removed" });
+    } catch (err) {
+        console.error('Error removing pending post:', err);
+        res.status(500).json({ error: "Failed to remove pending post", details: err.message });
+    }
+});
+
 app.post("/api/status/:guildId/post", (req, res) => {
     const { guildId } = req.params;
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
