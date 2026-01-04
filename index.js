@@ -457,6 +457,44 @@ app.get('/api/guild/:guildId/members', async (req, res) => {
 
 // ============ LEVELING SYSTEM ENDPOINTS ============
 
+// Check if guild has active premium
+app.get("/api/premium/:guildId/check", (req, res) => {
+    const { guildId } = req.params;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        // Try to read from premium_data.json
+        let premiumData = {};
+        const premiumDataPath = path.join(__dirname, 'premium_data.json');
+        
+        try {
+            if (fs.existsSync(premiumDataPath)) {
+                const fileContent = fs.readFileSync(premiumDataPath, 'utf8');
+                premiumData = JSON.parse(fileContent);
+            }
+        } catch (err) {
+            console.log('Premium data file not found or invalid');
+        }
+
+        const guildIdStr = guildId.toString();
+        const hasPremium = premiumData[guildIdStr] && premiumData[guildIdStr].active === true;
+        
+        res.json({ 
+            hasPremium: hasPremium,
+            guildId: guildId
+        });
+    } catch (err) {
+        console.error('Error checking premium status:', err);
+        res.status(500).json({ error: "Failed to check premium status", details: err.message });
+    }
+});
+
 // Get leveling settings for a guild
 app.get("/api/leveling/:guildId/settings", (req, res) => {
     const { guildId } = req.params;
