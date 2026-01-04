@@ -754,10 +754,11 @@ app.post("/api/status/:guildId/settings", (req, res) => {
         const oldChannelId = oldSettings.channel_id;
         
         console.log(`📋 Retrieved old settings for guild ${guildId}: messageId="${oldMessageId}", channelId="${oldChannelId}"`);
+        console.log(`🔍 Debug: oldMessageId type=${typeof oldMessageId}, value="${oldMessageId}", truthiness=${!!oldMessageId}, oldChannelId type=${typeof oldChannelId}, value="${oldChannelId}", truthiness=${!!oldChannelId}`);
 
         // QUEUE DELETION BEFORE CLEARING MESSAGE ID
-        // Queue a delete action for the old message (if one exists)
-        if (oldMessageId && oldChannelId) {
+        // Queue a delete action for the old message (if one exists) - check that it's not empty string and not "undefined"
+        if (oldMessageId && oldMessageId !== "" && oldMessageId !== "undefined" && oldChannelId && oldChannelId !== "" && oldChannelId !== "undefined") {
             try {
                 // Create a pending action to delete the old message
                 let pendingData = [];
