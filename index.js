@@ -753,78 +753,45 @@ app.post("/api/status/:guildId/settings", (req, res) => {
         const oldMessageId = oldSettings.message_id;
         const oldChannelId = oldSettings.channel_id;
         
-        // Retrieved old settings for guild
+        console.log(`📋 Retrieved old settings for guild ${guildId}: messageId="${oldMessageId}", channelId="${oldChannelId}"`);
 
         // QUEUE DELETION BEFORE CLEARING MESSAGE ID
-        // Queue a delete action for the old message (if one exists) - check that it's not empty string and not "undefined"
-        if (oldMessageId && oldMessageId !== "" && oldMessageId !== "undefined" && oldChannelId && oldChannelId !== "" && oldChannelId !== "undefined") {
-            // Attempting to queue deletion
+        // Queue a delete action for the old message (if one exists)
+        if (oldMessageId && oldChannelId) {
             try {
-                // Load pending posts file with proper structure
-                let pendingPosts = { posts: [] };
+                // Create a pending action to delete the old message
+                let pendingData = [];
                 const pendingPath = path.join(__dirname, 'pending_posts.json');
                 
                 try {
                     if (fs.existsSync(pendingPath)) {
-                        const fileContent = fs.readFileSync(pendingPath, 'utf8');
-                        const parsed = JSON.parse(fileContent);
-                        // Handle both array format and object format
-                        if (Array.isArray(parsed)) {
-                            pendingPosts = { posts: parsed };
-
-                        } else if (parsed && typeof parsed === 'object' && parsed.posts) {
-                            pendingPosts = parsed;
-
-                        }
+                        pendingData = JSON.parse(fs.readFileSync(pendingPath, 'utf8'));
                     }
                 } catch (err) {
-                    console.log(`⚠️ Error reading pending_posts.json: ${err.message}, starting fresh`);
-                    pendingPosts = { posts: [] };
+                    pendingData = [];
                 }
                 
-                // Ensure posts array exists
-                if (!pendingPosts.posts) {
-                    pendingPosts.posts = [];
+                // Add delete action
+                if (Array.isArray(pendingData)) {
+                    pendingData.push({
+                        action: "delete",
+                        guildId: guildId,
+                        channelId: oldChannelId,
+                        messageId: oldMessageId
+                    });
+                    fs.writeFileSync(pendingPath, JSON.stringify(pendingData, null, 4));
+                    console.log(`✅ Queued deletion of old message ${oldMessageId}`);
                 }
-                
-                // Add delete action to the BEGINNING so it processes first (before new post)
-                const deleteAction = {
-                    action: "delete",
-                    guildId: guildId,
-                    channelId: oldChannelId,
-                    messageId: oldMessageId
-                };
-                pendingPosts.posts.unshift(deleteAction);
-
-                
-                fs.writeFileSync(pendingPath, JSON.stringify(pendingPosts, null, 4));
-
             } catch (err) {
-                console.log(`⚠️ Error in delete queueing: ${err.message}`);
-                console.error(err);
+                console.log('Note: Could not queue message deletion');
             }
         } else {
             if (!oldMessageId) {
-
+                console.log('ℹ️ No previous message ID to delete (first post)');
             }
         }
         
-        // Now update the settings with new values and clear the message_id
-        statusData.settings[guildId] = {
-            enabled: enabled !== undefined ? enabled : true,
-            user_id: user_id || "",
-            channel_id: channel_id || "",
-            delay_seconds: delay_seconds || 30,
-            offline_message: offline_message || "",
-            automatic: automatic !== undefined ? automatic : false,
-            use_embed: use_embed !== undefined ? use_embed : true,
-            message_id: "", // Clear old message ID since new message will be posted
-            created_at: oldSettings.created_at || new Date().toISOString()
-        };
-        
-        // Save updated settings
-        fs.writeFileSync(statusFilePath, JSON.stringify(statusData, null, 4));
-
+        console.log(`✅ Status tracking settings saved for guild ${guildId}`);
 
         res.json({ 
             success: true, 
@@ -883,7 +850,37 @@ app.post("/api/status/:guildId/message-id", (req, res) => {
 
         // Save to file
         fs.writeFileSync(statusFilePath, JSON.stringify(statusData, null, 4));
+        console.log(`💾 Stored message ID ${messageId} for guild ${guildId}`);
 
+        // Queue a delete action for the old message (if one exists and is different from new)
+        if (oldMessageId && oldMessageId !== "" && oldMessageId !== messageId && oldChannelId) {
+            try {
+                let pendingData = [];
+                const pendingPath = path.join(__dirname, 'pending_posts.json');
+                
+                try {
+                    if (fs.existsSync(pendingPath)) {
+                        pendingData = JSON.parse(fs.readFileSync(pendingPath, 'utf8'));
+                    }
+                } catch (err) {
+                    pendingData = [];
+                }
+                
+                // Add delete action at the BEGINNING so it processes first
+                if (Array.isArray(pendingData)) {
+                    pendingData.unshift({
+                        action: "delete",
+                        guildId: guildId,
+                        channelId: oldChannelId,
+                        messageId: oldMessageId
+                    });
+                    fs.writeFileSync(pendingPath, JSON.stringify(pendingData, null, 4));
+                    console.log(`🗑️ Queued deletion of old message ${oldMessageId} before new message ${messageId}`);
+                }
+            } catch (err) {
+                console.log('⚠️ Could not queue message deletion:', err.message);
+            }
+        }
 
         res.json({ 
             success: true, 
@@ -892,6 +889,179 @@ app.post("/api/status/:guildId/message-id", (req, res) => {
     } catch (err) {
         console.error('Error storing message ID:', err);
         res.status(500).json({ error: "Failed to store message ID", details: err.message });
+    }
+});
+
+// Get status settings endpoint
+app.get("/api/status/:guildId/settings", (req, res) => {
+    const { guildId } = req.params;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        let statusData = { settings: {} };
+        const statusFilePath = path.join(__dirname, 'status_data.json');
+        
+        try {
+            if (fs.existsSync(statusFilePath)) {
+                const fileContent = fs.readFileSync(statusFilePath, 'utf8');
+                statusData = JSON.parse(fileContent);
+            }
+        } catch (err) {
+            console.log('Creating new status_data.json file');
+        }
+
+        const settings = statusData.settings[guildId] || {};
+        res.json({ settings: settings });
+    } catch (err) {
+        console.error('Error fetching status settings:', err);
+        res.status(500).json({ error: "Failed to fetch settings", details: err.message });
+    }
+});
+
+// Update status endpoint
+app.post("/api/status/:guildId/update", (req, res) => {
+    const { guildId } = req.params;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { user_id } = req.body;
+    
+    if (!guildId || !user_id) {
+        return res.status(400).json({ error: "guildId and user_id are required" });
+    }
+
+    try {
+        // Queue an update action for the bot to process
+        let pendingData = [];
+        const pendingPath = path.join(__dirname, 'pending_posts.json');
+        
+        try {
+            if (fs.existsSync(pendingPath)) {
+                const fileContent = fs.readFileSync(pendingPath, 'utf8');
+                const parsed = JSON.parse(fileContent);
+                if (Array.isArray(parsed)) {
+                    pendingData = parsed;
+                } else if (parsed && typeof parsed === 'object' && parsed.posts) {
+                    pendingData = parsed.posts;
+                }
+            }
+        } catch (err) {
+            pendingData = [];
+        }
+
+        // Add update action
+        const updateAction = {
+            action: "update-status",
+            guildId: guildId,
+            userId: user_id
+        };
+
+        if (Array.isArray(pendingData)) {
+            pendingData.push(updateAction);
+            fs.writeFileSync(pendingPath, JSON.stringify({ posts: pendingData }, null, 4));
+        } else {
+            pendingData.posts.push(updateAction);
+            fs.writeFileSync(pendingPath, JSON.stringify(pendingData, null, 4));
+        }
+
+        res.json({ success: true, message: "Status update queued" });
+    } catch (err) {
+        console.error('Error queueing status update:', err);
+        res.status(500).json({ error: "Failed to queue status update", details: err.message });
+    }
+});
+
+// Reset status endpoint
+app.post("/api/status/:guildId/reset", (req, res) => {
+    const { guildId } = req.params;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { user_id } = req.body;
+    
+    if (!guildId || !user_id) {
+        return res.status(400).json({ error: "guildId and user_id are required" });
+    }
+
+    try {
+        // Read existing status_data.json
+        let statusData = { settings: {} };
+        const statusFilePath = path.join(__dirname, 'status_data.json');
+        
+        try {
+            if (fs.existsSync(statusFilePath)) {
+                const fileContent = fs.readFileSync(statusFilePath, 'utf8');
+                statusData = JSON.parse(fileContent);
+            }
+        } catch (err) {
+            console.log('Creating new status_data.json file');
+        }
+
+        // Get the old message ID for deletion
+        const oldSettings = statusData.settings[guildId] || {};
+        const oldMessageId = oldSettings.message_id;
+        const oldChannelId = oldSettings.channel_id;
+
+        // Queue deletion if there's a message to delete
+        if (oldMessageId && oldMessageId !== "" && oldMessageId !== "undefined" && oldChannelId && oldChannelId !== "" && oldChannelId !== "undefined") {
+            try {
+                let pendingPosts = { posts: [] };
+                const pendingPath = path.join(__dirname, 'pending_posts.json');
+                
+                try {
+                    if (fs.existsSync(pendingPath)) {
+                        const fileContent = fs.readFileSync(pendingPath, 'utf8');
+                        const parsed = JSON.parse(fileContent);
+                        if (Array.isArray(parsed)) {
+                            pendingPosts = { posts: parsed };
+                        } else if (parsed && typeof parsed === 'object' && parsed.posts) {
+                            pendingPosts = parsed;
+                        }
+                    }
+                } catch (err) {
+                    pendingPosts = { posts: [] };
+                }
+                
+                if (!pendingPosts.posts) {
+                    pendingPosts.posts = [];
+                }
+                
+                pendingPosts.posts.push({
+                    action: "delete",
+                    guildId: guildId,
+                    channelId: oldChannelId,
+                    messageId: oldMessageId
+                });
+                
+                fs.writeFileSync(pendingPath, JSON.stringify(pendingPosts, null, 4));
+            } catch (err) {
+                console.log('Note: Could not queue message deletion');
+            }
+        }
+
+        // Clear settings for this guild
+        if (statusData.settings[guildId]) {
+            delete statusData.settings[guildId];
+            fs.writeFileSync(statusFilePath, JSON.stringify(statusData, null, 4));
+        }
+
+        res.json({ success: true, message: "Status tracking reset" });
+    } catch (err) {
+        console.error('Error resetting status:', err);
+        res.status(500).json({ error: "Failed to reset status", details: err.message });
     }
 });
 
@@ -942,13 +1112,7 @@ app.post("/api/status/pending-posts/remove/:index", (req, res) => {
         try {
             if (fs.existsSync(pendingPostsPath)) {
                 const fileContent = fs.readFileSync(pendingPostsPath, 'utf8');
-                const parsed = JSON.parse(fileContent);
-                // Handle both array format and object format
-                if (Array.isArray(parsed)) {
-                    pendingPosts = { posts: parsed };
-                } else if (parsed && typeof parsed === 'object' && parsed.posts) {
-                    pendingPosts = parsed;
-                }
+                pendingPosts = JSON.parse(fileContent);
             }
         } catch (err) {
             console.log('No pending posts file');
@@ -958,7 +1122,7 @@ app.post("/api/status/pending-posts/remove/:index", (req, res) => {
         if (index >= 0 && index < pendingPosts.posts.length) {
             pendingPosts.posts.splice(parseInt(index), 1);
             fs.writeFileSync(pendingPostsPath, JSON.stringify(pendingPosts, null, 4));
-    
+            console.log(`✅ Removed pending post at index ${index}`);
         }
 
         res.json({ success: true, message: "Post removed" });
@@ -992,25 +1156,13 @@ app.post("/api/status/:guildId/post", (req, res) => {
         try {
             if (fs.existsSync(pendingPostsPath)) {
                 const fileContent = fs.readFileSync(pendingPostsPath, 'utf8');
-                const parsed = JSON.parse(fileContent);
-                // Handle both array format (from delete queueing) and object format (from this endpoint)
-                if (Array.isArray(parsed)) {
-                    pendingPosts = { posts: parsed };
-                } else if (parsed && typeof parsed === 'object' && parsed.posts) {
-                    pendingPosts = parsed;
-                } else {
-                    pendingPosts = { posts: [] };
-                }
+                pendingPosts = JSON.parse(fileContent);
             }
         } catch (err) {
             console.log('Creating new pending_posts.json file');
-            pendingPosts = { posts: [] };
         }
 
-        // Add new post request to posts array
-        if (!pendingPosts.posts) {
-            pendingPosts.posts = [];
-        }
+        // Add new post request
         pendingPosts.posts.push({
             guildId: guildId,
             userId: user_id,
@@ -1022,7 +1174,7 @@ app.post("/api/status/:guildId/post", (req, res) => {
 
         // Save to file
         fs.writeFileSync(pendingPostsPath, JSON.stringify(pendingPosts, null, 4));
-
+        console.log(`📤 Status post request queued for guild ${guildId}, user ${user_id}, channel ${channel_id}`);
 
         res.json({ 
             success: true, 
