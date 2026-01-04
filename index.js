@@ -414,8 +414,7 @@ app.get("/api/economy/:guildId/settings", (req, res) => {
                 const settings = {
                     enabled: botSettings.enabled || false,
                     per_message: botSettings.per_message || 10,
-                    currency_symbol: botSettings.currency || "💰",
-                    starting_amount: botSettings.start || 500
+                    currency_symbol: botSettings.currency || "💰"
                 };
                 return res.json(settings);
             }
@@ -428,8 +427,7 @@ app.get("/api/economy/:guildId/settings", (req, res) => {
     const defaultSettings = {
         enabled: false,
         per_message: 10,
-        currency_symbol: "💰",
-        starting_amount: 500
+        currency_symbol: "💰"
     };
 
     const settings = global.economySettings[guildId] || defaultSettings;
@@ -447,7 +445,7 @@ app.post("/api/economy/:guildId/settings", (req, res) => {
         return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { enabled, per_message, currency_symbol, starting_amount } = req.body;
+    const { enabled, per_message, currency_symbol } = req.body;
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
@@ -462,7 +460,6 @@ app.post("/api/economy/:guildId/settings", (req, res) => {
         enabled: enabled || false,
         per_message: per_message || 10,
         currency_symbol: currency_symbol || "💰",
-        starting_amount: starting_amount || 500,
         lastUpdated: new Date().toISOString()
     };
 
@@ -487,7 +484,6 @@ app.post("/api/economy/:guildId/settings", (req, res) => {
         // Update settings with the correct key names for the bot
         economyData.settings[guildId] = {
             currency: currency_symbol || "💰",
-            start: starting_amount || 500,
             per_message: per_message || 10,
             enabled: enabled || false
         };
