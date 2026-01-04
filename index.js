@@ -360,6 +360,45 @@ app.post("/api/resolve-user/:guildId", (req, res) => {
     }
 });
 
+// Get guild members list
+app.get('/api/guild/:guildId/members', async (req, res) => {
+    const { guildId } = req.params;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        // Query Discord API to get guild members
+        const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members?limit=1000`, {
+            headers: {
+                'Authorization': `Bot ${process.env.DISCORD_BOT_TOKEN}`
+            }
+        });
+
+        if (!response.ok) {
+            return res.status(response.status).json({ error: "Failed to fetch guild members" });
+        }
+
+        const members = await response.json();
+        
+        // Map members to id and username
+        const memberList = members.map(member => ({
+            id: member.user.id,
+            username: member.user.username,
+            displayName: member.nick || member.user.username
+        }));
+
+        res.json({ members: memberList });
+    } catch (err) {
+        console.error('Error fetching guild members:', err);
+        res.status(500).json({ error: "Failed to fetch guild members", details: err.message });
+    }
+});
+
 // ============ LEVELING SYSTEM ENDPOINTS ============
 
 // Get leveling settings for a guild
