@@ -687,17 +687,40 @@ app.post("/api/status/:guildId/post", (req, res) => {
     }
 
     try {
-        // This endpoint will be called by the dashboard to trigger a status post
-        // The bot will handle the actual posting via a trigger from this endpoint
-        console.log(`📤 Status post triggered for guild ${guildId}, user ${user_id}, channel ${channel_id}`);
+        // Load pending posts file
+        let pendingPosts = { posts: [] };
+        const pendingPostsPath = path.join(__dirname, 'pending_posts.json');
+        
+        try {
+            if (fs.existsSync(pendingPostsPath)) {
+                const fileContent = fs.readFileSync(pendingPostsPath, 'utf8');
+                pendingPosts = JSON.parse(fileContent);
+            }
+        } catch (err) {
+            console.log('Creating new pending_posts.json file');
+        }
+
+        // Add new post request
+        pendingPosts.posts.push({
+            guildId: guildId,
+            userId: user_id,
+            channelId: channel_id,
+            offlineMessage: offline_message || 'User is currently offline',
+            useEmbed: use_embed !== undefined ? use_embed : false,
+            timestamp: new Date().toISOString()
+        });
+
+        // Save to file
+        fs.writeFileSync(pendingPostsPath, JSON.stringify(pendingPosts, null, 4));
+        console.log(`📤 Status post request queued for guild ${guildId}, user ${user_id}, channel ${channel_id}`);
 
         res.json({ 
             success: true, 
-            message: "Status post triggered successfully" 
+            message: "Status post queued - bot will post immediately" 
         });
     } catch (err) {
-        console.error('Error triggering status post:', err);
-        res.status(500).json({ error: "Failed to trigger status post", details: err.message });
+        console.error('Error queueing status post:', err);
+        res.status(500).json({ error: "Failed to queue status post", details: err.message });
     }
 });
 
