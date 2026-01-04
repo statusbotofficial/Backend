@@ -295,6 +295,57 @@ app.post("/api/channels/:guildId", (req, res) => {
     });
 });
 
+// ============ USER RESOLUTION ENDPOINT ============
+
+// Resolve a user reference (mention, username, or ID) to a Discord user ID
+app.post("/api/resolve-user/:guildId", (req, res) => {
+    const { guildId } = req.params;
+    const { userReference } = req.body;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    if (!userReference) {
+        return res.status(400).json({ error: "userReference is required" });
+    }
+
+    try {
+        let userId = null;
+        const ref = userReference.trim();
+        
+        // Check if it's a mention like <@123456789>
+        const mentionMatch = ref.match(/<@!?(\d+)>/);
+        if (mentionMatch) {
+            userId = mentionMatch[1];
+        } 
+        // Check if it's a numeric ID
+        else if (/^\d+$/.test(ref)) {
+            userId = ref;
+        }
+        // For usernames, we can't resolve them without access to guild members
+        // Just return an error asking for ID or mention
+        else {
+            return res.status(400).json({ 
+                error: "Invalid user reference",
+                message: "Please use a user mention (e.g., @username) or numeric user ID"
+            });
+        }
+
+        res.json({ 
+            success: true, 
+            userId: userId,
+            userReference: ref
+        });
+    } catch (err) {
+        console.error('Error resolving user:', err);
+        res.status(500).json({ error: "Failed to resolve user", details: err.message });
+    }
+});
+
 // ============ LEVELING SYSTEM ENDPOINTS ============
 
 // Get leveling settings for a guild
