@@ -933,7 +933,7 @@ app.post("/api/status/:guildId/update", (req, res) => {
         return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { user_id } = req.body;
+    const { user_id, status, reason } = req.body;
     
     if (!guildId || !user_id) {
         return res.status(400).json({ error: "guildId and user_id are required" });
@@ -962,7 +962,9 @@ app.post("/api/status/:guildId/update", (req, res) => {
         const updateAction = {
             action: "update-status",
             guildId: guildId,
-            userId: user_id
+            userId: user_id,
+            status: status || null,
+            reason: reason || null
         };
 
         if (Array.isArray(pendingData)) {
