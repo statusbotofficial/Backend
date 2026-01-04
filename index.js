@@ -326,12 +326,26 @@ app.post("/api/resolve-user/:guildId", (req, res) => {
         else if (/^\d+$/.test(ref)) {
             userId = ref;
         }
-        // For usernames, we can't resolve them without access to guild members
-        // Just return an error asking for ID or mention
+        // Check if it's @username or just username - simple fallback
+        else if (ref.startsWith('@')) {
+            // For now, ask user to use numeric ID since we can't access guild members from backend
+            return res.status(400).json({ 
+                error: "Username resolution unavailable",
+                message: "Please use a numeric user ID or copy a proper Discord mention (right-click user > Copy User ID)"
+            });
+        } 
+        // Plain username without @
+        else if (/^[a-zA-Z0-9_]+$/.test(ref)) {
+            // For now, ask user to use numeric ID since we can't access guild members from backend
+            return res.status(400).json({ 
+                error: "Username resolution unavailable",
+                message: "Please use a numeric user ID or copy a proper Discord mention (right-click user > Copy User ID)"
+            });
+        }
         else {
             return res.status(400).json({ 
                 error: "Invalid user reference",
-                message: "Please use a user mention (e.g., @username) or numeric user ID"
+                message: "Please use a Discord user mention format <@username> or numeric user ID"
             });
         }
 
