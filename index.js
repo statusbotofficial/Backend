@@ -3,10 +3,6 @@ import cors from "cors";
 import Groq from "groq-sdk";
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -404,6 +400,8 @@ app.get("/api/economy/:guildId/settings", (req, res) => {
 
     // Try to load from economy_data.json file first
     try {
+        const fs = require('fs');
+        const path = require('path');
         const economyFilePath = path.join(__dirname, 'economy_data.json');
         
         if (fs.existsSync(economyFilePath)) {
@@ -470,17 +468,17 @@ app.post("/api/economy/:guildId/settings", (req, res) => {
 
     // Also save to economy_data.json file with the correct key format for the bot
     try {
-        // Try to read existing economy_data.json
-        let economyData = { balances: {}, settings: {}, user_metadata: {} };
-        const economyFilePath = path.join(__dirname, 'economy_data.json');
+        const fs = require('fs');
+        const path = require('path');
         
-        console.log(`📝 Economy file path: ${economyFilePath}`);
+        // Try to read existing economy_data.json
+        let economyData = { balances: {}, settings: {} };
+        const economyFilePath = path.join(__dirname, 'economy_data.json');
         
         try {
             if (fs.existsSync(economyFilePath)) {
                 const fileContent = fs.readFileSync(economyFilePath, 'utf8');
                 economyData = JSON.parse(fileContent);
-                console.log(`📖 Loaded existing economy data`);
             }
         } catch (err) {
             console.log('Creating new economy_data.json file');
@@ -494,12 +492,9 @@ app.post("/api/economy/:guildId/settings", (req, res) => {
             enabled: enabled || false
         };
         
-        console.log(`💾 Saving economy settings for guild ${guildId}:`, economyData.settings[guildId]);
-        
         // Save to file
         fs.writeFileSync(economyFilePath, JSON.stringify(economyData, null, 4));
         console.log(`✅ Economy settings saved to file for guild ${guildId}`);
-        console.log(`📌 Starting amount set to: ${starting_amount}`);
     } catch (err) {
         console.error('Error saving economy settings to file:', err);
         // Don't fail the response, just log the error
