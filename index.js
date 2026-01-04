@@ -753,13 +753,12 @@ app.post("/api/status/:guildId/settings", (req, res) => {
         const oldMessageId = oldSettings.message_id;
         const oldChannelId = oldSettings.channel_id;
         
-        console.log(`📋 Retrieved old settings for guild ${guildId}: messageId="${oldMessageId}", channelId="${oldChannelId}"`);
-        console.log(`🔍 Debug: oldMessageId type=${typeof oldMessageId}, value="${oldMessageId}", truthiness=${!!oldMessageId}, oldChannelId type=${typeof oldChannelId}, value="${oldChannelId}", truthiness=${!!oldChannelId}`);
+        // Retrieved old settings for guild
 
         // QUEUE DELETION BEFORE CLEARING MESSAGE ID
         // Queue a delete action for the old message (if one exists) - check that it's not empty string and not "undefined"
         if (oldMessageId && oldMessageId !== "" && oldMessageId !== "undefined" && oldChannelId && oldChannelId !== "" && oldChannelId !== "undefined") {
-            console.log(`🗑️ Attempting to queue deletion for message ${oldMessageId} in channel ${oldChannelId}`);
+            // Attempting to queue deletion
             try {
                 // Load pending posts file with proper structure
                 let pendingPosts = { posts: [] };
@@ -772,10 +771,10 @@ app.post("/api/status/:guildId/settings", (req, res) => {
                         // Handle both array format and object format
                         if (Array.isArray(parsed)) {
                             pendingPosts = { posts: parsed };
-                            console.log(`📂 Converted array format to object format, length: ${pendingPosts.posts.length}`);
+
                         } else if (parsed && typeof parsed === 'object' && parsed.posts) {
                             pendingPosts = parsed;
-                            console.log(`📂 Read existing pending_posts.json, current length: ${pendingPosts.posts.length}`);
+
                         }
                     }
                 } catch (err) {
@@ -796,17 +795,17 @@ app.post("/api/status/:guildId/settings", (req, res) => {
                     messageId: oldMessageId
                 };
                 pendingPosts.posts.unshift(deleteAction);
-                console.log(`✅ Added delete action to queue, new length: ${pendingPosts.posts.length}`);
+
                 
                 fs.writeFileSync(pendingPath, JSON.stringify(pendingPosts, null, 4));
-                console.log(`✅ Queued deletion of old message ${oldMessageId}`);
+
             } catch (err) {
                 console.log(`⚠️ Error in delete queueing: ${err.message}`);
                 console.error(err);
             }
         } else {
             if (!oldMessageId) {
-                console.log('ℹ️ No previous message ID to delete (first post)');
+
             }
         }
         
@@ -825,7 +824,7 @@ app.post("/api/status/:guildId/settings", (req, res) => {
         
         // Save updated settings
         fs.writeFileSync(statusFilePath, JSON.stringify(statusData, null, 4));
-        console.log(`✅ Status tracking settings saved for guild ${guildId}`);
+
 
         res.json({ 
             success: true, 
@@ -884,7 +883,7 @@ app.post("/api/status/:guildId/message-id", (req, res) => {
 
         // Save to file
         fs.writeFileSync(statusFilePath, JSON.stringify(statusData, null, 4));
-        console.log(`💾 Stored message ID ${messageId} for guild ${guildId}`);
+
 
         res.json({ 
             success: true, 
@@ -959,7 +958,7 @@ app.post("/api/status/pending-posts/remove/:index", (req, res) => {
         if (index >= 0 && index < pendingPosts.posts.length) {
             pendingPosts.posts.splice(parseInt(index), 1);
             fs.writeFileSync(pendingPostsPath, JSON.stringify(pendingPosts, null, 4));
-            console.log(`✅ Removed pending post at index ${index}`);
+    
         }
 
         res.json({ success: true, message: "Post removed" });
@@ -1023,7 +1022,7 @@ app.post("/api/status/:guildId/post", (req, res) => {
 
         // Save to file
         fs.writeFileSync(pendingPostsPath, JSON.stringify(pendingPosts, null, 4));
-        console.log(`📤 Status post request queued for guild ${guildId}, user ${user_id}, channel ${channel_id}`);
+
 
         res.json({ 
             success: true, 
