@@ -759,32 +759,44 @@ app.post("/api/status/:guildId/settings", (req, res) => {
         // QUEUE DELETION BEFORE CLEARING MESSAGE ID
         // Queue a delete action for the old message (if one exists) - check that it's not empty string and not "undefined"
         if (oldMessageId && oldMessageId !== "" && oldMessageId !== "undefined" && oldChannelId && oldChannelId !== "" && oldChannelId !== "undefined") {
+            console.log(`🗑️ Attempting to queue deletion for message ${oldMessageId} in channel ${oldChannelId}`);
             try {
                 // Create a pending action to delete the old message
                 let pendingData = [];
                 const pendingPath = path.join(__dirname, 'pending_posts.json');
                 
+                console.log(`📂 Checking for pending_posts.json at ${pendingPath}`);
                 try {
                     if (fs.existsSync(pendingPath)) {
-                        pendingData = JSON.parse(fs.readFileSync(pendingPath, 'utf8'));
+                        const fileContent = fs.readFileSync(pendingPath, 'utf8');
+                        pendingData = JSON.parse(fileContent);
+                        console.log(`📂 Read existing pending_posts.json, current array length: ${pendingData.length}`);
+                    } else {
+                        console.log(`📂 pending_posts.json does not exist, creating new array`);
                     }
                 } catch (err) {
+                    console.log(`⚠️ Error reading pending_posts.json: ${err.message}`);
                     pendingData = [];
                 }
                 
                 // Add delete action
                 if (Array.isArray(pendingData)) {
-                    pendingData.push({
+                    const deleteAction = {
                         action: "delete",
                         guildId: guildId,
                         channelId: oldChannelId,
                         messageId: oldMessageId
-                    });
+                    };
+                    pendingData.push(deleteAction);
+                    console.log(`✅ Added delete action to array, new length: ${pendingData.length}`);
                     fs.writeFileSync(pendingPath, JSON.stringify(pendingData, null, 4));
                     console.log(`✅ Queued deletion of old message ${oldMessageId}`);
+                } else {
+                    console.log(`⚠️ pendingData is not an array! Type: ${typeof pendingData}`);
                 }
             } catch (err) {
-                console.log('Note: Could not queue message deletion');
+                console.log(`⚠️ Error in delete queueing: ${err.message}`);
+                console.error(err);
             }
         } else {
             if (!oldMessageId) {
