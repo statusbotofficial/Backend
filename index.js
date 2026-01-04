@@ -748,6 +748,11 @@ app.post("/api/status/:guildId/settings", (req, res) => {
             console.log('Creating new status_data.json file');
         }
 
+        // Get the OLD settings BEFORE updating (to get the message_id)
+        const oldSettings = statusData.settings[guildId] || {};
+        const oldMessageId = oldSettings.message_id;
+        const oldChannelId = oldSettings.channel_id;
+
         // Update settings - completely replace with new settings
         statusData.settings[guildId] = {
             enabled: enabled || false,
@@ -764,9 +769,8 @@ app.post("/api/status/:guildId/settings", (req, res) => {
         fs.writeFileSync(statusFilePath, JSON.stringify(statusData, null, 4));
         
         // Queue a delete action for the old message (if one exists)
-        try {
-            const oldSettings = statusData.settings[guildId];
-            if (oldSettings.message_id && oldSettings.channel_id) {
+        if (oldMessageId && oldChannelId) {
+            try {
                 // Create a pending action to delete the old message
                 let pendingData = [];
                 const pendingPath = path.join(__dirname, 'pending_posts.json');
@@ -784,15 +788,15 @@ app.post("/api/status/:guildId/settings", (req, res) => {
                     pendingData.push({
                         action: "delete",
                         guildId: guildId,
-                        channelId: oldSettings.channel_id,
-                        messageId: oldSettings.message_id
+                        channelId: oldChannelId,
+                        messageId: oldMessageId
                     });
                     fs.writeFileSync(pendingPath, JSON.stringify(pendingData, null, 4));
-                    console.log(`✅ Queued deletion of old message ${oldSettings.message_id}`);
+                    console.log(`✅ Queued deletion of old message ${oldMessageId}`);
                 }
+            } catch (err) {
+                console.log('Note: Could not queue message deletion');
             }
-        } catch (err) {
-            console.log('Note: Could not queue message deletion');
         }
         
         console.log(`✅ Status tracking settings saved for guild ${guildId}`);
