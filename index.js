@@ -360,6 +360,46 @@ app.post("/api/resolve-user/:guildId", (req, res) => {
     }
 });
 
+// Cache for guild members (with TTL of 5 minutes)
+let guildMembersCache = {};
+const MEMBERS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Retry function with exponential backoff
+async function fetchWithRetry(url, options, maxRetries = 3) {
+    let lastError;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+            const response = await fetch(url, options);
+            
+            // If it's a rate limit error, wait and retry
+            if (response.status === 429) {
+                const retryAfter = response.headers.get('Retry-After') || (Math.pow(2, attempt) * 1000);
+                console.warn(`Rate limited. Retrying after ${retryAfter}ms (attempt ${attempt + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, parseInt(retryAfter)));
+                continue;
+            }
+            
+            // If successful, return response
+            if (response.ok) {
+                return response;
+            }
+            
+            // Other errors, just return the response
+            return response;
+        } catch (err) {
+            lastError = err;
+            if (attempt < maxRetries - 1) {
+                const delay = Math.pow(2, attempt) * 1000;
+                console.warn(`Fetch attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+    }
+    
+    throw lastError || new Error('Max retries exceeded');
+}
+
 // Get guild members list
 app.get('/api/guild/:guildId/members', async (req, res) => {
     const { guildId } = req.params;
@@ -372,14 +412,24 @@ app.get('/api/guild/:guildId/members', async (req, res) => {
     }
 
     try {
-        // Query Discord API to get guild members
-        const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members?limit=1000`, {
-            headers: {
-                'Authorization': `Bot ${process.env.DISCORD_BOT_TOKEN}`
+        // Check if members are cached and cache is still valid
+        if (guildMembersCache[guildId] && Date.now() - guildMembersCache[guildId].timestamp < MEMBERS_CACHE_TTL) {
+            console.log(`✅ Returning cached members for guild ${guildId}`);
+            return res.json({ members: guildMembersCache[guildId].data });
+        }
+
+        // Query Discord API to get guild members with retry logic
+        const response = await fetchWithRetry(
+            `https://discord.com/api/v10/guilds/${guildId}/members?limit=1000`,
+            {
+                headers: {
+                    'Authorization': `Bot ${process.env.DISCORD_BOT_TOKEN}`
+                }
             }
-        });
+        );
 
         if (!response.ok) {
+            console.error(`Discord API returned ${response.status} for guild ${guildId}`);
             return res.status(response.status).json({ error: "Failed to fetch guild members" });
         }
 
@@ -391,6 +441,12 @@ app.get('/api/guild/:guildId/members', async (req, res) => {
             username: member.user.username,
             displayName: member.nick || member.user.username
         }));
+
+        // Cache the members
+        guildMembersCache[guildId] = {
+            data: memberList,
+            timestamp: Date.now()
+        };
 
         res.json({ members: memberList });
     } catch (err) {
