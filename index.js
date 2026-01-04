@@ -560,6 +560,112 @@ app.post("/api/economy/:guildId/reset-balances", (req, res) => {
     }
 });
 
+// ========== STATUS TRACKING ENDPOINTS ==========
+
+app.get("/api/status/:guildId/settings", (req, res) => {
+    const { guildId } = req.params;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    if (!guildId) {
+        return res.status(400).json({ error: "guildId is required" });
+    }
+
+    try {
+        // Try to read from status_data.json
+        let statusData = { settings: {} };
+        const statusFilePath = path.join(__dirname, 'status_data.json');
+        
+        try {
+            if (fs.existsSync(statusFilePath)) {
+                const fileContent = fs.readFileSync(statusFilePath, 'utf8');
+                statusData = JSON.parse(fileContent);
+            }
+        } catch (err) {
+            console.log('Status_data.json not found, creating new one');
+        }
+
+        const settings = statusData.settings[guildId] || {
+            enabled: false,
+            user_id: "",
+            channel_id: "",
+            delay_seconds: "60",
+            offline_message: "User is currently offline",
+            automatic: true,
+            use_embed: true
+        };
+
+        res.json({ 
+            success: true, 
+            settings: settings 
+        });
+    } catch (err) {
+        console.error('Error fetching status settings:', err);
+        res.status(500).json({ error: "Failed to fetch settings", details: err.message });
+    }
+});
+
+app.post("/api/status/:guildId/settings", (req, res) => {
+    const { guildId } = req.params;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { enabled, user_id, channel_id, delay_seconds, offline_message, automatic, use_embed } = req.body;
+
+    if (!guildId) {
+        return res.status(400).json({ error: "guildId is required" });
+    }
+
+    try {
+        // Try to read existing status_data.json
+        let statusData = { settings: {} };
+        const statusFilePath = path.join(__dirname, 'status_data.json');
+        
+        try {
+            if (fs.existsSync(statusFilePath)) {
+                const fileContent = fs.readFileSync(statusFilePath, 'utf8');
+                statusData = JSON.parse(fileContent);
+            }
+        } catch (err) {
+            console.log('Creating new status_data.json file');
+        }
+
+        // Update settings
+        statusData.settings[guildId] = {
+            enabled: enabled || false,
+            user_id: user_id || "",
+            channel_id: channel_id || "",
+            delay_seconds: delay_seconds || "60",
+            offline_message: offline_message || "User is currently offline",
+            automatic: automatic !== undefined ? automatic : true,
+            use_embed: use_embed !== undefined ? use_embed : true
+        };
+
+        // Save to file
+        fs.writeFileSync(statusFilePath, JSON.stringify(statusData, null, 4));
+        console.log(`✅ Status tracking settings saved for guild ${guildId}`);
+
+        res.json({ 
+            success: true, 
+            message: "Status tracking settings saved", 
+            settings: statusData.settings[guildId] 
+        });
+    } catch (err) {
+        console.error('Error saving status settings:', err);
+        res.status(500).json({ error: "Failed to save settings", details: err.message });
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
