@@ -174,6 +174,21 @@ app.get("/api/bot-guilds", (req, res) => {
     });
 });
 
+// Endpoint to check if a user has premium (user-specific)
+app.get("/api/user-premium/:userId", (req, res) => {
+    const { userId } = req.params;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // For now, we don't have a user premium database, so return false
+    // In the future, this can be connected to a user premium database
+    res.json({ 
+        userId: userId,
+        hasPremium: false,
+        reason: "User premium system not yet implemented"
+    });
+});
+
 // Endpoint to get server overview data
 app.get("/api/server-overview/:guildId", (req, res) => {
     const { guildId } = req.params;
@@ -185,7 +200,7 @@ app.get("/api/server-overview/:guildId", (req, res) => {
         // For now, return mock data if not authorized - in production, verify Discord token
         const mockData = serverData[guildId] || {
             memberCount: 0,
-            isPremium: false,
+            userHasPremium: false,
             trackedUser: null,
             topUsers: []
         };
@@ -194,7 +209,7 @@ app.get("/api/server-overview/:guildId", (req, res) => {
 
     const overview = serverData[guildId] || {
         memberCount: 0,
-        isPremium: false,
+        userHasPremium: false,
         trackedUser: null,
         topUsers: []
     };
@@ -242,7 +257,7 @@ app.post("/api/server-data/update", (req, res) => {
 
     serverData[guildId] = {
         memberCount: memberCount || 0,
-        isPremium: isPremium || false,
+        userHasPremium: false,
         trackedUser: trackedUser || null,
         topUsers: topUsers || [],
         allUsers: allUsers || [],
@@ -722,6 +737,79 @@ app.post("/api/economy/:guildId/reset-balances", (req, res) => {
         console.error('Error resetting economy balances:', err);
         res.status(500).json({ error: "Failed to reset balances", details: err.message });
     }
+});
+
+// ========== WELCOME SETTINGS ENDPOINTS ==========
+
+// Get welcome settings for a guild
+app.get("/api/welcome/:guildId/settings", (req, res) => {
+    const { guildId } = req.params;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    // Initialize global storage if needed
+    if (!global.welcomeSettings) {
+        global.welcomeSettings = {};
+    }
+
+    // Return stored settings or defaults if not stored
+    const defaultSettings = {
+        enabled: false,
+        use_embed: false,
+        channel_id: null,
+        message: "Welcome to the server!",
+        title: null,
+        description: null,
+        color: "#5170ff"
+    };
+
+    const settings = global.welcomeSettings[guildId] || defaultSettings;
+    res.json(settings);
+});
+
+// Save welcome settings for a guild
+app.post("/api/welcome/:guildId/settings", (req, res) => {
+    const { guildId } = req.params;
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { enabled, use_embed, channel_id, message, title, description, color } = req.body;
+
+    if (!guildId) {
+        return res.status(400).json({ error: "guildId is required" });
+    }
+
+    // Initialize global storage if needed
+    if (!global.welcomeSettings) {
+        global.welcomeSettings = {};
+    }
+
+    global.welcomeSettings[guildId] = {
+        enabled: enabled || false,
+        use_embed: use_embed || false,
+        channel_id: channel_id || null,
+        message: message || "Welcome to the server!",
+        title: title || null,
+        description: description || null,
+        color: color || "#5170ff",
+        lastUpdated: new Date().toISOString()
+    };
+
+    res.json({ 
+        success: true, 
+        message: "Welcome settings saved", 
+        settings: global.welcomeSettings[guildId] 
+    });
 });
 
 // ========== STATUS TRACKING ENDPOINTS ==========
