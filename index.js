@@ -180,13 +180,33 @@ app.get("/api/user-premium/:userId", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
     
-    // For now, we don't have a user premium database, so return false
-    // In the future, this can be connected to a user premium database
-    res.json({ 
-        userId: userId,
-        hasPremium: false,
-        reason: "User premium system not yet implemented"
-    });
+    try {
+        // Read premium data from file (same directory as index.js for Render backend)
+        const premiumDataPath = path.join(__dirname, 'premium_data.json');
+        let premiumData = {};
+        
+        if (fs.existsSync(premiumDataPath)) {
+            const rawData = fs.readFileSync(premiumDataPath, 'utf8');
+            premiumData = JSON.parse(rawData);
+        }
+        
+        // Check if user has premium
+        const userPremiumInfo = premiumData[userId];
+        const hasPremium = !!userPremiumInfo;
+        
+        res.json({ 
+            userId: userId,
+            hasPremium: hasPremium,
+            expiryDate: userPremiumInfo ? userPremiumInfo.expiry : null
+        });
+    } catch (error) {
+        console.error('Error checking user premium:', error);
+        res.json({ 
+            userId: userId,
+            hasPremium: false,
+            error: 'Error reading premium data'
+        });
+    }
 });
 
 // Endpoint to get server overview data
