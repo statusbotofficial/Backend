@@ -833,10 +833,16 @@ app.get("/api/welcome/:guildId/settings", (req, res) => {
         enabled: false,
         use_embed: false,
         channel_id: null,
-        message: "Welcome to the server!",
-        title: null,
-        description: null,
-        color: "#5170ff"
+        member_count_channel_id: null,
+        text: "Welcome to our server, {user}!",
+        title: "Welcome!",
+        description: "Welcome to our server!",
+        footer: "",
+        thumbnail: "https://cdn.discordapp.com/embed/avatars/0.png",
+        image: "",
+        color: "#5170ff",
+        member_goal: 0,
+        fields: []
     };
 
     const settings = global.welcomeSettings[guildId] || defaultSettings;
@@ -854,7 +860,7 @@ app.post("/api/welcome/:guildId/settings", (req, res) => {
         return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { enabled, use_embed, channel_id, message, title, description, color } = req.body;
+    const { enabled, use_embed, channel_id, member_count_channel_id, text, title, description, footer, thumbnail, image, color, member_goal, fields } = req.body;
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
@@ -869,10 +875,16 @@ app.post("/api/welcome/:guildId/settings", (req, res) => {
         enabled: enabled || false,
         use_embed: use_embed || false,
         channel_id: channel_id || null,
-        message: message || "Welcome to the server!",
-        title: title || null,
-        description: description || null,
+        member_count_channel_id: member_count_channel_id || null,
+        text: text || "Welcome to our server, {user}!",
+        title: title || "Welcome!",
+        description: description || "Welcome to our server!",
+        footer: footer || "",
+        thumbnail: thumbnail || "https://cdn.discordapp.com/embed/avatars/0.png",
+        image: image || "",
         color: color || "#5170ff",
+        member_goal: member_goal || 0,
+        fields: fields || [],
         lastUpdated: new Date().toISOString()
     };
 
