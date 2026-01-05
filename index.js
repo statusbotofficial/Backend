@@ -179,17 +179,11 @@ app.get("/api/server-overview/:guildId", (req, res) => {
     const { guildId } = req.params;
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
+    const hasValidAuth = authHeader.startsWith('Bearer ');
     
-    // Verify authorization
-    if (authHeader !== `Bearer ${SECRET_KEY}` && !req.query.token) {
-        // For now, return mock data if not authorized - in production, verify Discord token
-        const mockData = serverData[guildId] || {
-            memberCount: 0,
-            isPremium: false,
-            trackedUser: null,
-            topUsers: []
-        };
-        return res.json(mockData);
+    // Accept requests with valid authorization header (either secret key or Discord token)
+    if (!hasValidAuth) {
+        return res.status(401).json({ error: "Unauthorized" });
     }
 
     const overview = serverData[guildId] || {
@@ -202,19 +196,15 @@ app.get("/api/server-overview/:guildId", (req, res) => {
     res.json(overview);
 });
 
-// Endpoint to get full server leaderboard
 app.get("/api/server-leaderboard/:guildId", (req, res) => {
     const { guildId } = req.params;
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
+    const hasValidAuth = authHeader.startsWith('Bearer ');
     
-    // Verify authorization
-    if (authHeader !== `Bearer ${SECRET_KEY}` && !req.query.token) {
-        // For now, return mock data if not authorized
-        const mockData = serverData[guildId] || {
-            allUsers: []
-        };
-        return res.json(mockData);
+    // Accept requests with valid authorization header
+    if (!hasValidAuth) {
+        return res.status(401).json({ error: "Unauthorized" });
     }
 
     const leaderboard = serverData[guildId] || {
