@@ -202,7 +202,8 @@ app.get("/api/server-overview/:guildId", (req, res) => {
             memberCount: 0,
             userHasPremium: false,
             trackedUser: null,
-            topUsers: []
+            topUsers: [],
+            allUsers: []
         };
         return res.json(mockData);
     }
@@ -211,7 +212,8 @@ app.get("/api/server-overview/:guildId", (req, res) => {
         memberCount: 0,
         userHasPremium: false,
         trackedUser: null,
-        topUsers: []
+        topUsers: [],
+        allUsers: []
     };
 
     res.json(overview);
