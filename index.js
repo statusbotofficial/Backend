@@ -179,11 +179,17 @@ app.get("/api/server-overview/:guildId", (req, res) => {
     const { guildId } = req.params;
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
-    const hasValidAuth = authHeader.startsWith('Bearer ');
     
-    // Accept requests with valid authorization header (either secret key or Discord token)
-    if (!hasValidAuth) {
-        return res.status(401).json({ error: "Unauthorized" });
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}` && !req.query.token) {
+        // For now, return mock data if not authorized - in production, verify Discord token
+        const mockData = serverData[guildId] || {
+            memberCount: 0,
+            isPremium: false,
+            trackedUser: null,
+            topUsers: []
+        };
+        return res.json(mockData);
     }
 
     const overview = serverData[guildId] || {
@@ -196,15 +202,19 @@ app.get("/api/server-overview/:guildId", (req, res) => {
     res.json(overview);
 });
 
+// Endpoint to get full server leaderboard
 app.get("/api/server-leaderboard/:guildId", (req, res) => {
     const { guildId } = req.params;
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
-    const hasValidAuth = authHeader.startsWith('Bearer ');
     
-    // Accept requests with valid authorization header
-    if (!hasValidAuth) {
-        return res.status(401).json({ error: "Unauthorized" });
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}` && !req.query.token) {
+        // For now, return mock data if not authorized
+        const mockData = serverData[guildId] || {
+            allUsers: []
+        };
+        return res.json(mockData);
     }
 
     const leaderboard = serverData[guildId] || {
@@ -446,44 +456,6 @@ app.get('/api/guild/:guildId/members', async (req, res) => {
 });
 
 // ============ LEVELING SYSTEM ENDPOINTS ============
-
-// Check if guild has active premium
-app.get("/api/premium/:guildId/check", (req, res) => {
-    const { guildId } = req.params;
-    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
-    const authHeader = req.headers['authorization'] || '';
-    
-    // Verify authorization
-    if (authHeader !== `Bearer ${SECRET_KEY}`) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    try {
-        // Try to read from premium_data.json
-        let premiumData = {};
-        const premiumDataPath = path.join(__dirname, 'premium_data.json');
-        
-        try {
-            if (fs.existsSync(premiumDataPath)) {
-                const fileContent = fs.readFileSync(premiumDataPath, 'utf8');
-                premiumData = JSON.parse(fileContent);
-            }
-        } catch (err) {
-            console.log('Premium data file not found or invalid');
-        }
-
-        const guildIdStr = guildId.toString();
-        const hasPremium = premiumData[guildIdStr] && premiumData[guildIdStr].active === true;
-        
-        res.json({ 
-            hasPremium: hasPremium,
-            guildId: guildId
-        });
-    } catch (err) {
-        console.error('Error checking premium status:', err);
-        res.status(500).json({ error: "Failed to check premium status", details: err.message });
-    }
-});
 
 // Get leveling settings for a guild
 app.get("/api/leveling/:guildId/settings", (req, res) => {
@@ -769,8 +741,8 @@ app.get("/api/status/:guildId/settings", (req, res) => {
     }
 
     try {
-        // Read from status_data.json - bot structure: { guildId: { userId: { config } } }
-        let statusData = {};
+        // Try to read from status_data.json
+        let statusData = { settings: {} };
         const statusFilePath = path.join(__dirname, 'status_data.json');
         
         try {
@@ -779,32 +751,18 @@ app.get("/api/status/:guildId/settings", (req, res) => {
                 statusData = JSON.parse(fileContent);
             }
         } catch (err) {
-            console.log('Status_data.json not found or invalid');
+            console.log('Status_data.json not found, creating new one');
         }
 
-        // Get the first tracked user's settings (for backwards compatibility with website)
-        let settings = null;
-        if (statusData[guildId]) {
-            const userIds = Object.keys(statusData[guildId]);
-            if (userIds.length > 0) {
-                settings = statusData[guildId][userIds[0]];
-            }
-        }
-
-        if (!settings) {
-            settings = {
-                user_id: "",
-                channel_id: "",
-                message_id: "",
-                delay: "30",
-                delay_seconds: 30,
-                automatic: true,
-                use_embed: true,
-                default_offline_message: "User is currently offline",
-                is_online: true,
-                custom_reason: null
-            };
-        }
+        const settings = statusData.settings[guildId] || {
+            enabled: false,
+            user_id: "",
+            channel_id: "",
+            delay_seconds: "60",
+            offline_message: "User is currently offline",
+            automatic: true,
+            use_embed: true
+        };
 
         res.json({ 
             success: true, 
@@ -834,8 +792,7 @@ app.post("/api/status/:guildId/settings", (req, res) => {
 
     try {
         // Try to read existing status_data.json
-        // Bot expects structure: { guildId: { userId: { config... }, userId: { config... } } }
-        let statusData = {};
+        let statusData = { settings: {} };
         const statusFilePath = path.join(__dirname, 'status_data.json');
         
         try {
@@ -847,13 +804,8 @@ app.post("/api/status/:guildId/settings", (req, res) => {
             console.log('Creating new status_data.json file');
         }
 
-        // Initialize guild data if it doesn't exist
-        if (!statusData[guildId]) {
-            statusData[guildId] = {};
-        }
-
         // Get the OLD settings BEFORE updating (to get the message_id)
-        const oldSettings = statusData[guildId][user_id] || {};
+        const oldSettings = statusData.settings[guildId] || {};
         const oldMessageId = oldSettings.message_id;
         const oldChannelId = oldSettings.channel_id;
         
@@ -914,18 +866,15 @@ app.post("/api/status/:guildId/settings", (req, res) => {
         }
         
         // Now update the settings with new values and clear the message_id
-        statusData[guildId][user_id] = {
+        statusData.settings[guildId] = {
+            enabled: enabled !== undefined ? enabled : true,
             user_id: user_id || "",
             channel_id: channel_id || "",
-            message_id: "", // Clear old message ID since new message will be posted
-            delay: delay_seconds || "30",
-            delay_seconds: parseInt(delay_seconds) || 30,
+            delay_seconds: delay_seconds || 30,
+            offline_message: offline_message || "",
             automatic: automatic !== undefined ? automatic : false,
             use_embed: use_embed !== undefined ? use_embed : true,
-            default_offline_message: offline_message || "User is currently offline",
-            is_online: true, // Default to online initially
-            custom_reason: null,
-            pending_update: null,
+            message_id: "", // Clear old message ID since new message will be posted
             created_at: oldSettings.created_at || new Date().toISOString()
         };
         
@@ -936,7 +885,7 @@ app.post("/api/status/:guildId/settings", (req, res) => {
         res.json({ 
             success: true, 
             message: "Status tracking settings saved", 
-            settings: statusData[guildId][user_id] 
+            settings: statusData.settings[guildId] 
         });
     } catch (err) {
         console.error('Error saving status settings:', err);
@@ -962,8 +911,8 @@ app.post("/api/status/:guildId/message-id", (req, res) => {
     }
 
     try {
-        // Read existing status_data.json - bot structure: { guildId: { userId: { config } } }
-        let statusData = {};
+        // Read existing status_data.json
+        let statusData = { settings: {} };
         const statusFilePath = path.join(__dirname, 'status_data.json');
         
         try {
@@ -975,20 +924,17 @@ app.post("/api/status/:guildId/message-id", (req, res) => {
             console.log('Creating new status_data.json file');
         }
 
-        // Initialize guild data if it doesn't exist
-        if (!statusData[guildId]) {
-            statusData[guildId] = {};
-        }
+        // Get the OLD message ID BEFORE storing the new one (if it exists and is different)
+        const oldSettings = statusData.settings[guildId] || {};
+        const oldMessageId = oldSettings.message_id;
+        const oldChannelId = oldSettings.channel_id;
 
-        // Find the first tracked user and update message ID
-        const userIds = Object.keys(statusData[guildId]);
-        if (userIds.length > 0) {
-            const userId = userIds[0];
-            statusData[guildId][userId].message_id = messageId;
-            statusData[guildId][userId].channel_id = channelId;
-            statusData[guildId][userId].last_message_timestamp = new Date().toISOString();
+        // Update the message ID for this guild
+        if (statusData.settings[guildId]) {
+            statusData.settings[guildId].message_id = messageId;
+            statusData.settings[guildId].last_message_timestamp = new Date().toISOString();
         } else {
-            console.warn(`⚠️ No tracked users found for guild ${guildId}`);
+            console.warn(`⚠️ Guild ${guildId} settings not found when storing message ID`);
         }
 
         // Save to file
