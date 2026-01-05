@@ -177,8 +177,6 @@ app.get("/api/bot-guilds", (req, res) => {
 // Endpoint to check if a user has premium (user-specific)
 app.get("/api/user-premium/:userId", (req, res) => {
     const { userId } = req.params;
-    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
-    const authHeader = req.headers['authorization'] || '';
     
     try {
         // Read premium data from file (same directory as index.js for Render backend)
@@ -192,18 +190,31 @@ app.get("/api/user-premium/:userId", (req, res) => {
         
         // Check if user has premium
         const userPremiumInfo = premiumData[userId];
-        const hasPremium = !!userPremiumInfo;
+        let hasPremium = false;
+        let expiryDate = null;
+        
+        if (userPremiumInfo) {
+            // Check if premium is active
+            if (userPremiumInfo.active === true) {
+                // Check if not expired
+                if (!userPremiumInfo.expiry || Date.now() / 1000 < userPremiumInfo.expiry) {
+                    hasPremium = true;
+                    expiryDate = userPremiumInfo.expiry ? new Date(userPremiumInfo.expiry * 1000).toISOString() : null;
+                }
+            }
+        }
         
         res.json({ 
             userId: userId,
             hasPremium: hasPremium,
-            expiryDate: userPremiumInfo ? userPremiumInfo.expiry : null
+            expiryDate: expiryDate
         });
     } catch (error) {
         console.error('Error checking user premium:', error);
         res.json({ 
             userId: userId,
             hasPremium: false,
+            expiryDate: null,
             error: 'Error reading premium data'
         });
     }
