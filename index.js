@@ -731,7 +731,7 @@ app.post("/api/economy/:guildId/settings", (req, res) => {
         
         // Update settings with the correct key names for the bot
         economyData.settings[guildId] = {
-            currency: currency_symbol || "💰",
+            currency_symbol: currency_symbol || "💰",
             start: starting_amount || 500,
             per_message: per_message || 10,
             enabled: enabled || false
