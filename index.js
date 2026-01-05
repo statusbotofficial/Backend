@@ -769,8 +769,8 @@ app.get("/api/status/:guildId/settings", (req, res) => {
     }
 
     try {
-        // Try to read from status_data.json
-        let statusData = { settings: {} };
+        // Read from status_data.json - bot structure: { guildId: { userId: { config } } }
+        let statusData = {};
         const statusFilePath = path.join(__dirname, 'status_data.json');
         
         try {
@@ -779,18 +779,32 @@ app.get("/api/status/:guildId/settings", (req, res) => {
                 statusData = JSON.parse(fileContent);
             }
         } catch (err) {
-            console.log('Status_data.json not found, creating new one');
+            console.log('Status_data.json not found or invalid');
         }
 
-        const settings = statusData.settings[guildId] || {
-            enabled: false,
-            user_id: "",
-            channel_id: "",
-            delay_seconds: "60",
-            offline_message: "User is currently offline",
-            automatic: true,
-            use_embed: true
-        };
+        // Get the first tracked user's settings (for backwards compatibility with website)
+        let settings = null;
+        if (statusData[guildId]) {
+            const userIds = Object.keys(statusData[guildId]);
+            if (userIds.length > 0) {
+                settings = statusData[guildId][userIds[0]];
+            }
+        }
+
+        if (!settings) {
+            settings = {
+                user_id: "",
+                channel_id: "",
+                message_id: "",
+                delay: "30",
+                delay_seconds: 30,
+                automatic: true,
+                use_embed: true,
+                default_offline_message: "User is currently offline",
+                is_online: true,
+                custom_reason: null
+            };
+        }
 
         res.json({ 
             success: true, 
@@ -820,7 +834,8 @@ app.post("/api/status/:guildId/settings", (req, res) => {
 
     try {
         // Try to read existing status_data.json
-        let statusData = { settings: {} };
+        // Bot expects structure: { guildId: { userId: { config... }, userId: { config... } } }
+        let statusData = {};
         const statusFilePath = path.join(__dirname, 'status_data.json');
         
         try {
@@ -832,8 +847,13 @@ app.post("/api/status/:guildId/settings", (req, res) => {
             console.log('Creating new status_data.json file');
         }
 
+        // Initialize guild data if it doesn't exist
+        if (!statusData[guildId]) {
+            statusData[guildId] = {};
+        }
+
         // Get the OLD settings BEFORE updating (to get the message_id)
-        const oldSettings = statusData.settings[guildId] || {};
+        const oldSettings = statusData[guildId][user_id] || {};
         const oldMessageId = oldSettings.message_id;
         const oldChannelId = oldSettings.channel_id;
         
@@ -894,15 +914,18 @@ app.post("/api/status/:guildId/settings", (req, res) => {
         }
         
         // Now update the settings with new values and clear the message_id
-        statusData.settings[guildId] = {
-            enabled: enabled !== undefined ? enabled : true,
+        statusData[guildId][user_id] = {
             user_id: user_id || "",
             channel_id: channel_id || "",
-            delay_seconds: delay_seconds || 30,
-            offline_message: offline_message || "",
+            message_id: "", // Clear old message ID since new message will be posted
+            delay: delay_seconds || "30",
+            delay_seconds: parseInt(delay_seconds) || 30,
             automatic: automatic !== undefined ? automatic : false,
             use_embed: use_embed !== undefined ? use_embed : true,
-            message_id: "", // Clear old message ID since new message will be posted
+            default_offline_message: offline_message || "User is currently offline",
+            is_online: true, // Default to online initially
+            custom_reason: null,
+            pending_update: null,
             created_at: oldSettings.created_at || new Date().toISOString()
         };
         
@@ -913,7 +936,7 @@ app.post("/api/status/:guildId/settings", (req, res) => {
         res.json({ 
             success: true, 
             message: "Status tracking settings saved", 
-            settings: statusData.settings[guildId] 
+            settings: statusData[guildId][user_id] 
         });
     } catch (err) {
         console.error('Error saving status settings:', err);
@@ -939,8 +962,8 @@ app.post("/api/status/:guildId/message-id", (req, res) => {
     }
 
     try {
-        // Read existing status_data.json
-        let statusData = { settings: {} };
+        // Read existing status_data.json - bot structure: { guildId: { userId: { config } } }
+        let statusData = {};
         const statusFilePath = path.join(__dirname, 'status_data.json');
         
         try {
@@ -952,17 +975,20 @@ app.post("/api/status/:guildId/message-id", (req, res) => {
             console.log('Creating new status_data.json file');
         }
 
-        // Get the OLD message ID BEFORE storing the new one (if it exists and is different)
-        const oldSettings = statusData.settings[guildId] || {};
-        const oldMessageId = oldSettings.message_id;
-        const oldChannelId = oldSettings.channel_id;
+        // Initialize guild data if it doesn't exist
+        if (!statusData[guildId]) {
+            statusData[guildId] = {};
+        }
 
-        // Update the message ID for this guild
-        if (statusData.settings[guildId]) {
-            statusData.settings[guildId].message_id = messageId;
-            statusData.settings[guildId].last_message_timestamp = new Date().toISOString();
+        // Find the first tracked user and update message ID
+        const userIds = Object.keys(statusData[guildId]);
+        if (userIds.length > 0) {
+            const userId = userIds[0];
+            statusData[guildId][userId].message_id = messageId;
+            statusData[guildId][userId].channel_id = channelId;
+            statusData[guildId][userId].last_message_timestamp = new Date().toISOString();
         } else {
-            console.warn(`⚠️ Guild ${guildId} settings not found when storing message ID`);
+            console.warn(`⚠️ No tracked users found for guild ${guildId}`);
         }
 
         // Save to file
