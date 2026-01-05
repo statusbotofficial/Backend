@@ -30,6 +30,9 @@ let serverData = {};
 // Server channels storage
 let serverChannels = {};
 
+// Premium data cache (populated by bot)
+let premiumCache = {};
+
 const SYSTEM_PROMPT = `
 You are the official AI support assistant for the Status Bot Discord bot.
 
@@ -179,27 +182,38 @@ app.get("/api/user-premium/:userId", (req, res) => {
     const { userId } = req.params;
     
     try {
-        // Read premium data from file (same directory as index.js for Render backend)
-        const premiumDataPath = path.join(__dirname, 'premium_data.json');
-        let premiumData = {};
-        
-        if (fs.existsSync(premiumDataPath)) {
-            const rawData = fs.readFileSync(premiumDataPath, 'utf8');
-            premiumData = JSON.parse(rawData);
-        }
-        
-        // Check if user has premium
-        const userPremiumInfo = premiumData[userId];
         let hasPremium = false;
         let expiryDate = null;
         
-        if (userPremiumInfo) {
-            // Check if premium is active
+        // First check the premium cache (populated by bot)
+        if (premiumCache[userId]) {
+            const userPremiumInfo = premiumCache[userId];
             if (userPremiumInfo.active === true) {
-                // Check if not expired
                 if (!userPremiumInfo.expiry || Date.now() / 1000 < userPremiumInfo.expiry) {
                     hasPremium = true;
                     expiryDate = userPremiumInfo.expiry ? new Date(userPremiumInfo.expiry * 1000).toISOString() : null;
+                }
+            }
+        } else {
+            // Fallback: Read premium data from file (for backward compatibility)
+            const premiumDataPath = path.join(__dirname, 'premium_data.json');
+            let premiumData = {};
+            
+            if (fs.existsSync(premiumDataPath)) {
+                const rawData = fs.readFileSync(premiumDataPath, 'utf8');
+                premiumData = JSON.parse(rawData);
+            }
+            
+            // Check if user has premium
+            const userPremiumInfo = premiumData[userId];
+            if (userPremiumInfo) {
+                // Check if premium is active
+                if (userPremiumInfo.active === true) {
+                    // Check if not expired
+                    if (!userPremiumInfo.expiry || Date.now() / 1000 < userPremiumInfo.expiry) {
+                        hasPremium = true;
+                        expiryDate = userPremiumInfo.expiry ? new Date(userPremiumInfo.expiry * 1000).toISOString() : null;
+                    }
                 }
             }
         }
@@ -298,6 +312,30 @@ app.post("/api/server-data/update", (req, res) => {
     };
 
     res.json({ success: true, message: "Server data updated" });
+});
+
+// Endpoint for bot to sync premium data
+app.post("/api/premium-data/sync", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify the request is from your bot
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { premiumData } = req.body;
+
+    if (!premiumData) {
+        return res.status(400).json({ error: "premiumData is required" });
+    }
+
+    // Update premium cache with all data from bot
+    premiumCache = premiumData;
+    
+    console.log(`💎 Premium cache updated with ${Object.keys(premiumData).length} users`);
+    
+    res.json({ success: true, message: "Premium data synced" });
 });
 
 // ============ CHANNEL ENDPOINTS ============
@@ -846,6 +884,48 @@ app.post("/api/welcome/:guildId/settings", (req, res) => {
 });
 
 // ========== STATUS TRACKING ENDPOINTS ==========
+
+// Endpoint for bot to GET status data
+app.get("/api/status-data", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        // Read status_data.json from backend
+        let statusData = {};
+        const statusFilePath = path.join(__dirname, 'status_data.json');
+        
+        if (fs.existsSync(statusFilePath)) {
+            const fileContent = fs.readFileSync(statusFilePath, 'utf8');
+            const parsed = JSON.parse(fileContent);
+            // The file has a 'settings' key, but we need to convert it to the format the bot expects
+            // Bot expects: { guildId: { userId: { config } } }
+            // Backend stores: { settings: { guildId: { config } } }
+            if (parsed.settings) {
+                for (const [guildId, settings] of Object.entries(parsed.settings)) {
+                    if (settings.user_id) {
+                        statusData[guildId] = {
+                            [settings.user_id]: settings
+                        };
+                    }
+                }
+            }
+        }
+        
+        res.json({ 
+            success: true, 
+            statusData: statusData
+        });
+    } catch (err) {
+        console.error('Error fetching status data:', err);
+        res.status(500).json({ error: "Failed to fetch status data", details: err.message });
+    }
+});
 
 app.get("/api/status/:guildId/settings", (req, res) => {
     const { guildId } = req.params;
