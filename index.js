@@ -333,8 +333,6 @@ app.post("/api/premium-data/sync", (req, res) => {
     // Update premium cache with all data from bot
     premiumCache = premiumData;
     
-    console.log(`💎 Premium cache updated with ${Object.keys(premiumData).length} users`);
-    
     res.json({ success: true, message: "Premium data synced" });
 });
 
@@ -451,7 +449,7 @@ let guildMembersCache = {};
 const MEMBERS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 // Retry function with exponential backoff
-async function fetchWithRetry(url, options, maxRetries = 3) {
+async function fetchWithRetry(url, options, maxRetries = 5) {
     let lastError;
     
     for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -460,9 +458,9 @@ async function fetchWithRetry(url, options, maxRetries = 3) {
             
             // If it's a rate limit error, wait and retry
             if (response.status === 429) {
-                const retryAfter = response.headers.get('Retry-After') || (Math.pow(2, attempt) * 1000);
-                console.warn(`Rate limited. Retrying after ${retryAfter}ms (attempt ${attempt + 1}/${maxRetries})`);
-                await new Promise(resolve => setTimeout(resolve, parseInt(retryAfter)));
+                const retryAfter = response.headers.get('Retry-After') || (Math.pow(2, attempt + 1) * 1000);
+                const delayMs = parseInt(retryAfter);
+                await new Promise(resolve => setTimeout(resolve, delayMs));
                 continue;
             }
             
@@ -476,8 +474,7 @@ async function fetchWithRetry(url, options, maxRetries = 3) {
         } catch (err) {
             lastError = err;
             if (attempt < maxRetries - 1) {
-                const delay = Math.pow(2, attempt) * 1000;
-                console.warn(`Fetch attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
+                const delay = Math.pow(2, attempt + 1) * 1000;
                 await new Promise(resolve => setTimeout(resolve, delay));
             }
         }
