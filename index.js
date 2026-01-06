@@ -1378,6 +1378,37 @@ app.post("/api/premium/sync", (req, res) => {
     }
 });
 
+// Storage for global/broadcast gifts and notifications
+let globalGifts = [];
+let globalNotifications = [];
+
+function loadGlobalData() {
+    try {
+        const globalPath = path.join(__dirname, 'global_data.json');
+        if (fs.existsSync(globalPath)) {
+            const data = JSON.parse(fs.readFileSync(globalPath, 'utf8'));
+            globalGifts = data.gifts || [];
+            globalNotifications = data.notifications || [];
+        }
+    } catch (err) {
+        console.log('Global data file not found, starting fresh');
+    }
+}
+
+function saveGlobalData() {
+    try {
+        const globalPath = path.join(__dirname, 'global_data.json');
+        fs.writeFileSync(globalPath, JSON.stringify({
+            gifts: globalGifts,
+            notifications: globalNotifications
+        }, null, 4));
+    } catch (err) {
+        console.error('Error saving global data:', err);
+    }
+}
+
+loadGlobalData();
+
 // Send a trial to a user
 app.post("/api/trials/send", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
@@ -1388,52 +1419,58 @@ app.post("/api/trials/send", (req, res) => {
     }
 
     try {
-        const { userId, durationDays, targetUsers } = req.body;
+        const { userId, durationDays, targetUsers, sendToAll } = req.body;
         
         if (!userId || !durationDays) {
             return res.status(400).json({ error: "userId and durationDays are required" });
         }
 
-        // Get the list of target users (either specific user or all users with premium cache)
-        let targets = [];
-        if (targetUsers && Array.isArray(targetUsers)) {
-            targets = targetUsers;
-        } else {
-            targets = [userId];
-        }
+        const trialId = `trial_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const createdAt = Date.now();
+        const expiresAt = createdAt + (durationDays * 24 * 60 * 60 * 1000);
 
-        const trialsToCreate = [];
+        const trial = {
+            id: trialId,
+            durationDays,
+            createdAt,
+            expiresAt,
+            claimed: false,
+            claimedAt: null,
+            isGlobal: sendToAll || (targetUsers && targetUsers.length === 0)
+        };
 
-        targets.forEach(targetUserId => {
-            const trialId = `trial_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            const createdAt = Date.now();
-            const expiresAt = createdAt + (durationDays * 24 * 60 * 60 * 1000);
-
-            trialsToCreate.push({
-                id: trialId,
-                userId: String(targetUserId),
-                durationDays,
-                createdAt,
-                expiresAt,
-                claimed: false,
-                claimedAt: null
+        if (sendToAll || (targetUsers && targetUsers.length === 0)) {
+            // Store as global broadcast
+            globalGifts.push(trial);
+            saveGlobalData();
+        } else if (targetUsers && Array.isArray(targetUsers) && targetUsers.length > 0) {
+            // Store for specific users
+            targetUsers.forEach(targetUserId => {
+                if (!notificationsData[String(targetUserId)]) {
+                    notificationsData[String(targetUserId)] = { notifications: [], gifts: [] };
+                }
+                notificationsData[String(targetUserId)].gifts.push({
+                    ...trial,
+                    userId: String(targetUserId)
+                });
             });
-        });
-
-        // Store trials in notifications (as gifts)
-        trialsToCreate.forEach(trial => {
-            if (!notificationsData[trial.userId]) {
-                notificationsData[trial.userId] = { notifications: [], gifts: [] };
+            saveNotifications();
+        } else {
+            // Single user
+            if (!notificationsData[String(userId)]) {
+                notificationsData[String(userId)] = { notifications: [], gifts: [] };
             }
-            notificationsData[trial.userId].gifts.push(trial);
-        });
-
-        saveNotifications();
+            notificationsData[String(userId)].gifts.push({
+                ...trial,
+                userId: String(userId)
+            });
+            saveNotifications();
+        }
 
         res.json({ 
             success: true, 
-            message: `Trial(s) created for ${targets.length} user(s)`,
-            trials: trialsToCreate
+            message: sendToAll ? "Trial broadcast to all users!" : `Trial sent successfully`,
+            trialId
         });
     } catch (err) {
         console.error('Error creating trial:', err);
@@ -1591,17 +1628,20 @@ app.get("/api/user/:userId/gifts", (req, res) => {
 
     try {
         const { userId } = req.params;
-        const userNotifications = notificationsData[userId];
+        const now = Date.now();
 
-        if (!userNotifications || !userNotifications.gifts) {
-            return res.json({ gifts: [] });
+        // Get user-specific gifts
+        let gifts = [];
+        const userNotifications = notificationsData[userId];
+        if (userNotifications && userNotifications.gifts) {
+            gifts = userNotifications.gifts.filter(gift => gift.expiresAt > now && !gift.claimed);
         }
 
-        // Filter out expired gifts
-        const now = Date.now();
-        const activeGifts = userNotifications.gifts.filter(gift => gift.expiresAt > now);
+        // Add global broadcast gifts
+        const activeGlobalGifts = globalGifts.filter(gift => gift.expiresAt > now && !gift.claimed);
+        gifts = gifts.concat(activeGlobalGifts);
 
-        res.json({ gifts: activeGifts });
+        res.json({ gifts });
     } catch (err) {
         console.error('Error fetching gifts:', err);
         res.status(500).json({ error: "Failed to fetch gifts" });
@@ -1618,45 +1658,45 @@ app.post("/api/notifications/send", (req, res) => {
     }
 
     try {
-        const { title, message, type, targetUsers } = req.body;
+        const { title, message, type, targetUsers, sendToAll } = req.body;
         
         if (!title || !message || !type) {
             return res.status(400).json({ error: "title, message, and type are required" });
-        }
-
-        // Get target users (either specific users or all users in cache)
-        let targets = [];
-        if (targetUsers && Array.isArray(targetUsers) && targetUsers.length > 0) {
-            targets = targetUsers;
-        } else {
-            // Send to all users with premium cache
-            targets = Object.keys(premiumCache);
         }
 
         const notificationId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const createdAt = Date.now();
         const expiresAt = createdAt + (7 * 24 * 60 * 60 * 1000); // 7 days
 
-        targets.forEach(userId => {
-            if (!notificationsData[userId]) {
-                notificationsData[userId] = { notifications: [], gifts: [] };
-            }
-            notificationsData[userId].notifications.push({
-                id: notificationId,
-                title,
-                message,
-                type,
-                createdAt,
-                expiresAt,
-                read: false
-            });
-        });
+        const notification = {
+            id: notificationId,
+            title,
+            message,
+            type,
+            createdAt,
+            expiresAt,
+            read: false,
+            isGlobal: sendToAll || (targetUsers && targetUsers.length === 0)
+        };
 
-        saveNotifications();
+        if (sendToAll || (targetUsers && targetUsers.length === 0)) {
+            // Store as global broadcast
+            globalNotifications.push(notification);
+            saveGlobalData();
+        } else if (targetUsers && Array.isArray(targetUsers) && targetUsers.length > 0) {
+            // Send to specific users
+            targetUsers.forEach(userId => {
+                if (!notificationsData[String(userId)]) {
+                    notificationsData[String(userId)] = { notifications: [], gifts: [] };
+                }
+                notificationsData[String(userId)].notifications.push(notification);
+            });
+            saveNotifications();
+        }
 
         res.json({ 
             success: true, 
-            message: `Notification sent to ${targets.length} user(s)`,
+            message: sendToAll ? "Notification broadcast to all users!" : `Notification sent successfully`,
             notificationId
         });
     } catch (err) {
@@ -1676,17 +1716,20 @@ app.get("/api/user/:userId/notifications", (req, res) => {
 
     try {
         const { userId } = req.params;
-        const userNotifications = notificationsData[userId];
+        const now = Date.now();
 
-        if (!userNotifications || !userNotifications.notifications) {
-            return res.json({ notifications: [] });
+        // Get user-specific notifications
+        let notifications = [];
+        const userNotifications = notificationsData[userId];
+        if (userNotifications && userNotifications.notifications) {
+            notifications = userNotifications.notifications.filter(n => n.expiresAt > now && !n.read);
         }
 
-        // Filter out expired notifications and return
-        const now = Date.now();
-        const activeNotifications = userNotifications.notifications.filter(n => n.expiresAt > now);
+        // Add global broadcast notifications
+        const activeGlobalNotifications = globalNotifications.filter(n => n.expiresAt > now && !n.read);
+        notifications = notifications.concat(activeGlobalNotifications);
 
-        res.json({ notifications: activeNotifications });
+        res.json({ notifications });
     } catch (err) {
         console.error('Error fetching notifications:', err);
         res.status(500).json({ error: "Failed to fetch notifications" });
