@@ -1440,9 +1440,22 @@ app.post("/api/trials/send", (req, res) => {
         };
 
         if (sendToAll || (targetUsers && targetUsers.length === 0)) {
-            // Store as global broadcast
-            globalGifts.push(trial);
-            saveGlobalData();
+            // Send individual copies to all known users
+            const allUserIds = Object.keys(premiumCache);
+            if (allUserIds.length === 0) {
+                return res.status(400).json({ error: "No users have logged in yet. Send to specific user IDs instead." });
+            }
+            
+            allUserIds.forEach(targetUserId => {
+                if (!notificationsData[String(targetUserId)]) {
+                    notificationsData[String(targetUserId)] = { notifications: [], gifts: [] };
+                }
+                notificationsData[String(targetUserId)].gifts.push({
+                    ...trial,
+                    userId: String(targetUserId)
+                });
+            });
+            saveNotifications();
         } else if (targetUsers && Array.isArray(targetUsers) && targetUsers.length > 0) {
             // Store for specific users
             targetUsers.forEach(targetUserId => {
@@ -1469,7 +1482,7 @@ app.post("/api/trials/send", (req, res) => {
 
         res.json({ 
             success: true, 
-            message: sendToAll ? "Trial broadcast to all users!" : `Trial sent successfully`,
+            message: sendToAll ? `Trial sent to ${Array.isArray(targetUsers) ? targetUsers.length : Object.keys(premiumCache).length} users!` : `Trial sent successfully`,
             trialId
         });
     } catch (err) {
@@ -1644,16 +1657,12 @@ app.get("/api/user/:userId/gifts", (req, res) => {
         const { userId } = req.params;
         const now = Date.now();
 
-        // Get user-specific gifts
+        // Get user-specific gifts only
         let gifts = [];
         const userNotifications = notificationsData[userId];
         if (userNotifications && userNotifications.gifts) {
             gifts = userNotifications.gifts.filter(gift => gift.expiresAt > now && !gift.claimed);
         }
-
-        // Add global broadcast gifts
-        const activeGlobalGifts = globalGifts.filter(gift => gift.expiresAt > now && !gift.claimed);
-        gifts = gifts.concat(activeGlobalGifts);
 
         res.json({ gifts });
     } catch (err) {
