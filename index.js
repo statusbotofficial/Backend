@@ -33,6 +33,41 @@ let serverChannels = {};
 // Premium data cache (populated by bot)
 let premiumCache = {};
 
+// Known users who have logged into the website (for "send to all" distribution)
+let knownUsers = {};
+
+function loadKnownUsers() {
+    try {
+        const usersPath = path.join(__dirname, 'known_users.json');
+        if (fs.existsSync(usersPath)) {
+            knownUsers = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+        }
+    } catch (err) {
+        console.log('Known users file not found, starting fresh');
+        knownUsers = {};
+    }
+}
+
+function saveKnownUsers() {
+    try {
+        const usersPath = path.join(__dirname, 'known_users.json');
+        fs.writeFileSync(usersPath, JSON.stringify(knownUsers, null, 4));
+    } catch (err) {
+        console.error('Error saving known users:', err);
+    }
+}
+
+function trackUser(userId) {
+    if (!knownUsers[userId]) {
+        knownUsers[userId] = { loginCount: 0, lastLogin: null };
+    }
+    knownUsers[userId].loginCount++;
+    knownUsers[userId].lastLogin = new Date().toISOString();
+    saveKnownUsers();
+}
+
+loadKnownUsers();
+
 const SYSTEM_PROMPT = `
 You are the official AI support assistant for the Status Bot Discord bot.
 
@@ -1440,8 +1475,8 @@ app.post("/api/trials/send", (req, res) => {
         };
 
         if (sendToAll || (targetUsers && targetUsers.length === 0)) {
-            // Send individual copies to all known users
-            const allUserIds = Object.keys(premiumCache);
+            // Send individual copies to all known users who have logged in
+            const allUserIds = Object.keys(knownUsers);
             if (allUserIds.length === 0) {
                 return res.status(400).json({ error: "No users have logged in yet. Send to specific user IDs instead." });
             }
@@ -1482,7 +1517,7 @@ app.post("/api/trials/send", (req, res) => {
 
         res.json({ 
             success: true, 
-            message: sendToAll ? `Trial sent to ${Array.isArray(targetUsers) ? targetUsers.length : Object.keys(premiumCache).length} users!` : `Trial sent successfully`,
+            message: sendToAll ? `Trial sent to ${Array.isArray(targetUsers) ? targetUsers.length : Object.keys(knownUsers).length} users!` : `Trial sent successfully`,
             trialId
         });
     } catch (err) {
@@ -1739,6 +1774,10 @@ app.get("/api/user/:userId/notifications", (req, res) => {
 
     try {
         const { userId } = req.params;
+        
+        // Track this user as known
+        trackUser(userId);
+        
         const now = Date.now();
 
         // Get user-specific notifications
