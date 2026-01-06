@@ -1300,6 +1300,436 @@ app.post("/api/status/:guildId/post", (req, res) => {
     }
 });
 
+// ============ PREMIUM/TRIALS & NOTIFICATIONS SYSTEM ============
+
+// Helper function to load/save premium data from bot
+function loadPremiumData() {
+    try {
+        const premiumDataPath = path.join(__dirname, 'premium_data.json');
+        if (fs.existsSync(premiumDataPath)) {
+            return JSON.parse(fs.readFileSync(premiumDataPath, 'utf8'));
+        }
+    } catch (err) {
+        console.log('Premium data file not found, using cache');
+    }
+    return premiumCache;
+}
+
+function savePremiumData(data) {
+    try {
+        const premiumDataPath = path.join(__dirname, 'premium_data.json');
+        fs.writeFileSync(premiumDataPath, JSON.stringify(data, null, 4));
+        // Also update cache
+        Object.keys(data).forEach(key => {
+            premiumCache[key] = data[key];
+        });
+    } catch (err) {
+        console.error('Error saving premium data:', err);
+    }
+}
+
+// Helper function to load/save notifications
+let notificationsData = {};
+
+function loadNotifications() {
+    try {
+        const notificationsPath = path.join(__dirname, 'notifications.json');
+        if (fs.existsSync(notificationsPath)) {
+            notificationsData = JSON.parse(fs.readFileSync(notificationsPath, 'utf8'));
+        }
+    } catch (err) {
+        console.log('Notifications file not found, starting fresh');
+        notificationsData = {};
+    }
+}
+
+function saveNotifications() {
+    try {
+        const notificationsPath = path.join(__dirname, 'notifications.json');
+        fs.writeFileSync(notificationsPath, JSON.stringify(notificationsData, null, 4));
+    } catch (err) {
+        console.error('Error saving notifications:', err);
+    }
+}
+
+// Load notifications on startup
+loadNotifications();
+
+// Endpoint for bot to POST premium data (for syncing)
+app.post("/api/premium/sync", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const { premiumData } = req.body;
+        if (premiumData && typeof premiumData === 'object') {
+            savePremiumData(premiumData);
+            res.json({ success: true, message: "Premium data synced" });
+        } else {
+            res.status(400).json({ error: "Invalid premium data" });
+        }
+    } catch (err) {
+        console.error('Error syncing premium data:', err);
+        res.status(500).json({ error: "Failed to sync premium data" });
+    }
+});
+
+// Send a trial to a user
+app.post("/api/trials/send", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const { userId, durationDays, targetUsers } = req.body;
+        
+        if (!userId || !durationDays) {
+            return res.status(400).json({ error: "userId and durationDays are required" });
+        }
+
+        // Get the list of target users (either specific user or all users with premium cache)
+        let targets = [];
+        if (targetUsers && Array.isArray(targetUsers)) {
+            targets = targetUsers;
+        } else {
+            targets = [userId];
+        }
+
+        const trialsToCreate = [];
+
+        targets.forEach(targetUserId => {
+            const trialId = `trial_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const createdAt = Date.now();
+            const expiresAt = createdAt + (durationDays * 24 * 60 * 60 * 1000);
+
+            trialsToCreate.push({
+                id: trialId,
+                userId: String(targetUserId),
+                durationDays,
+                createdAt,
+                expiresAt,
+                claimed: false,
+                claimedAt: null
+            });
+        });
+
+        // Store trials in notifications (as gifts)
+        trialsToCreate.forEach(trial => {
+            if (!notificationsData[trial.userId]) {
+                notificationsData[trial.userId] = { notifications: [], gifts: [] };
+            }
+            notificationsData[trial.userId].gifts.push(trial);
+        });
+
+        saveNotifications();
+
+        res.json({ 
+            success: true, 
+            message: `Trial(s) created for ${targets.length} user(s)`,
+            trials: trialsToCreate
+        });
+    } catch (err) {
+        console.error('Error creating trial:', err);
+        res.status(500).json({ error: "Failed to create trial", details: err.message });
+    }
+});
+
+// Claim a trial (redeem gift)
+// Storage for pending premium claims (bot will fetch and process these)
+let pendingPremiumClaims = {};
+
+function loadPendingClaims() {
+    try {
+        const claimsPath = path.join(__dirname, 'pending_premium_claims.json');
+        if (fs.existsSync(claimsPath)) {
+            pendingPremiumClaims = JSON.parse(fs.readFileSync(claimsPath, 'utf8'));
+        }
+    } catch (err) {
+        console.log('Pending claims file not found, starting fresh');
+        pendingPremiumClaims = {};
+    }
+}
+
+function savePendingClaims() {
+    try {
+        const claimsPath = path.join(__dirname, 'pending_premium_claims.json');
+        fs.writeFileSync(claimsPath, JSON.stringify(pendingPremiumClaims, null, 4));
+    } catch (err) {
+        console.error('Error saving pending claims:', err);
+    }
+}
+
+loadPendingClaims();
+
+app.post("/api/trials/claim", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const { userId, trialId } = req.body;
+        
+        if (!userId || !trialId) {
+            return res.status(400).json({ error: "userId and trialId are required" });
+        }
+
+        const userNotifications = notificationsData[userId];
+        if (!userNotifications || !userNotifications.gifts) {
+            return res.status(404).json({ error: "No gifts found for user" });
+        }
+
+        const trial = userNotifications.gifts.find(g => g.id === trialId);
+        if (!trial) {
+            return res.status(404).json({ error: "Trial not found" });
+        }
+
+        if (trial.claimed) {
+            return res.status(400).json({ error: "Trial already claimed" });
+        }
+
+        // Mark as claimed locally
+        trial.claimed = true;
+        trial.claimedAt = Date.now();
+
+        // Create a pending claim for the bot to process
+        const claimId = `claim_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const expiryTime = Math.floor(Date.now() / 1000) + (trial.durationDays * 24 * 60 * 60);
+
+        pendingPremiumClaims[claimId] = {
+            userId: String(userId),
+            trialId,
+            durationDays: trial.durationDays,
+            expiryTime,
+            createdAt: Date.now(),
+            processed: false,
+            processedAt: null
+        };
+
+        savePendingClaims();
+        saveNotifications();
+
+        res.json({ 
+            success: true, 
+            message: "Trial claim submitted! Premium will be activated shortly.",
+            claimId,
+            premium: {
+                active: true,
+                expiry: expiryTime,
+                duration_days: trial.durationDays
+            }
+        });
+    } catch (err) {
+        console.error('Error claiming trial:', err);
+        res.status(500).json({ error: "Failed to claim trial", details: err.message });
+    }
+});
+
+// Endpoint for bot to fetch pending premium claims
+app.get("/api/premium/pending-claims", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const unprocessedClaims = Object.values(pendingPremiumClaims).filter(c => !c.processed);
+        res.json({ claims: unprocessedClaims });
+    } catch (err) {
+        console.error('Error fetching pending claims:', err);
+        res.status(500).json({ error: "Failed to fetch pending claims" });
+    }
+});
+
+// Endpoint for bot to mark claim as processed
+app.post("/api/premium/claim-processed", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const { claimId } = req.body;
+        
+        if (!claimId || !pendingPremiumClaims[claimId]) {
+            return res.status(404).json({ error: "Claim not found" });
+        }
+
+        pendingPremiumClaims[claimId].processed = true;
+        pendingPremiumClaims[claimId].processedAt = Date.now();
+
+        savePendingClaims();
+
+        res.json({ success: true, message: "Claim marked as processed" });
+    } catch (err) {
+        console.error('Error marking claim as processed:', err);
+        res.status(500).json({ error: "Failed to mark claim as processed" });
+    }
+});
+
+// Get user's gifts (trials)
+app.get("/api/user/:userId/gifts", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const { userId } = req.params;
+        const userNotifications = notificationsData[userId];
+
+        if (!userNotifications || !userNotifications.gifts) {
+            return res.json({ gifts: [] });
+        }
+
+        // Filter out expired gifts
+        const now = Date.now();
+        const activeGifts = userNotifications.gifts.filter(gift => gift.expiresAt > now);
+
+        res.json({ gifts: activeGifts });
+    } catch (err) {
+        console.error('Error fetching gifts:', err);
+        res.status(500).json({ error: "Failed to fetch gifts" });
+    }
+});
+
+// Send a notification to users
+app.post("/api/notifications/send", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const { title, message, type, targetUsers } = req.body;
+        
+        if (!title || !message || !type) {
+            return res.status(400).json({ error: "title, message, and type are required" });
+        }
+
+        // Get target users (either specific users or all users in cache)
+        let targets = [];
+        if (targetUsers && Array.isArray(targetUsers) && targetUsers.length > 0) {
+            targets = targetUsers;
+        } else {
+            // Send to all users with premium cache
+            targets = Object.keys(premiumCache);
+        }
+
+        const notificationId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const createdAt = Date.now();
+        const expiresAt = createdAt + (7 * 24 * 60 * 60 * 1000); // 7 days
+
+        targets.forEach(userId => {
+            if (!notificationsData[userId]) {
+                notificationsData[userId] = { notifications: [], gifts: [] };
+            }
+            notificationsData[userId].notifications.push({
+                id: notificationId,
+                title,
+                message,
+                type,
+                createdAt,
+                expiresAt,
+                read: false
+            });
+        });
+
+        saveNotifications();
+
+        res.json({ 
+            success: true, 
+            message: `Notification sent to ${targets.length} user(s)`,
+            notificationId
+        });
+    } catch (err) {
+        console.error('Error sending notification:', err);
+        res.status(500).json({ error: "Failed to send notification", details: err.message });
+    }
+});
+
+// Get user's notifications
+app.get("/api/user/:userId/notifications", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const { userId } = req.params;
+        const userNotifications = notificationsData[userId];
+
+        if (!userNotifications || !userNotifications.notifications) {
+            return res.json({ notifications: [] });
+        }
+
+        // Filter out expired notifications and return
+        const now = Date.now();
+        const activeNotifications = userNotifications.notifications.filter(n => n.expiresAt > now);
+
+        res.json({ notifications: activeNotifications });
+    } catch (err) {
+        console.error('Error fetching notifications:', err);
+        res.status(500).json({ error: "Failed to fetch notifications" });
+    }
+});
+
+// Mark notification as read
+app.post("/api/notifications/:notificationId/read", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const { notificationId } = req.params;
+        const { userId } = req.body;
+
+        if (!userId) {
+            return res.status(400).json({ error: "userId is required" });
+        }
+
+        const userNotifications = notificationsData[userId];
+        if (!userNotifications) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        const notification = userNotifications.notifications.find(n => n.id === notificationId);
+        if (!notification) {
+            return res.status(404).json({ error: "Notification not found" });
+        }
+
+        notification.read = true;
+        saveNotifications();
+
+        res.json({ success: true, message: "Notification marked as read" });
+    } catch (err) {
+        console.error('Error marking notification as read:', err);
+        res.status(500).json({ error: "Failed to mark notification as read" });
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
