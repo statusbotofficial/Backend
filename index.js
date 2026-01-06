@@ -1475,7 +1475,7 @@ app.post("/api/trials/send", (req, res) => {
         };
 
         if (sendToAll || (targetUsers && targetUsers.length === 0)) {
-            // Send individual copies to all known users who have logged in
+            // Send individual copies to all known users
             const allUserIds = Object.keys(knownUsers);
             if (allUserIds.length === 0) {
                 return res.status(400).json({ error: "No users have logged in yet. Send to specific user IDs instead." });
@@ -1517,7 +1517,7 @@ app.post("/api/trials/send", (req, res) => {
 
         res.json({ 
             success: true, 
-            message: sendToAll ? `Trial sent to ${Array.isArray(targetUsers) ? targetUsers.length : Object.keys(knownUsers).length} users!` : `Trial sent successfully`,
+            message: sendToAll ? `Trial sent to ${Object.keys(knownUsers).length} users!` : `Trial sent successfully`,
             trialId
         });
     } catch (err) {
@@ -1690,6 +1690,10 @@ app.get("/api/user/:userId/gifts", (req, res) => {
 
     try {
         const { userId } = req.params;
+        
+        // Track this user as known
+        trackUser(userId);
+        
         const now = Date.now();
 
         // Get user-specific gifts only
