@@ -1520,12 +1520,21 @@ app.post("/api/trials/claim", (req, res) => {
             return res.status(400).json({ error: "userId and trialId are required" });
         }
 
+        // Check user-specific gifts first
+        let trial = null;
+        let isGlobal = false;
+
         const userNotifications = notificationsData[userId];
-        if (!userNotifications || !userNotifications.gifts) {
-            return res.status(404).json({ error: "No gifts found for user" });
+        if (userNotifications && userNotifications.gifts) {
+            trial = userNotifications.gifts.find(g => g.id === trialId);
         }
 
-        const trial = userNotifications.gifts.find(g => g.id === trialId);
+        // If not found in user gifts, check global gifts
+        if (!trial) {
+            trial = globalGifts.find(g => g.id === trialId);
+            isGlobal = !!trial;
+        }
+
         if (!trial) {
             return res.status(404).json({ error: "Trial not found" });
         }
@@ -1534,7 +1543,7 @@ app.post("/api/trials/claim", (req, res) => {
             return res.status(400).json({ error: "Trial already claimed" });
         }
 
-        // Mark as claimed locally
+        // Mark as claimed
         trial.claimed = true;
         trial.claimedAt = Date.now();
 
@@ -1552,8 +1561,13 @@ app.post("/api/trials/claim", (req, res) => {
             processedAt: null
         };
 
+        // Save changes
+        if (isGlobal) {
+            saveGlobalData();
+        } else {
+            saveNotifications();
+        }
         savePendingClaims();
-        saveNotifications();
 
         res.json({ 
             success: true, 
