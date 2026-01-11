@@ -160,6 +160,18 @@ async function verifyDiscordToken(req, res, next) {
     }
 }
 
+// Verify bot secret key (for bot endpoints)
+function verifyBotSecret(req, res, next) {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    next();
+}
+
 app.post("/api/support/ai", async (req, res) => {
     try {
         const message = req.body?.message?.trim();
@@ -598,7 +610,7 @@ app.get('/api/guild/:guildId/members', async (req, res) => {
 // ============ LEVELING SYSTEM ENDPOINTS ============
 
 // Get leveling settings for a guild
-app.get("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
+app.get("/api/leveling/:guildId/settings", verifyBotSecret, (req, res) => {
     const { guildId } = req.params;
 
     try {
@@ -640,7 +652,7 @@ app.get("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
 });
 
 // Save leveling settings for a guild
-app.post("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
+app.post("/api/leveling/:guildId/settings", verifyBotSecret, (req, res) => {
     const { guildId } = req.params;
 
     // Map camelCase from frontend to snake_case for bot
