@@ -831,15 +831,8 @@ app.post("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
     });
 });
 
-app.post("/api/economy/:guildId/reset-balances", (req, res) => {
+app.post("/api/economy/:guildId/reset-balances", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
-    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
-    const authHeader = req.headers['authorization'] || '';
-    
-    // Verify authorization
-    if (authHeader !== `Bearer ${SECRET_KEY}`) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
@@ -860,7 +853,7 @@ app.post("/api/economy/:guildId/reset-balances", (req, res) => {
         }
 
         // Get the current starting amount for this guild
-        const startingAmount = economyData.settings[guildId]?.start || 500;
+        const startingAmount = economyData.settings[guildId]?.starting_amount || 500;
 
         // Reset all balances for this guild to the starting amount
         if (!economyData.balances[guildId]) {
