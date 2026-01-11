@@ -186,13 +186,14 @@ app.post("/api/bot-stats/update", (req, res) => {
         return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { servers, ping, guildIds } = req.body;
+    const { servers, ping, guildIds, uptime } = req.body;
 
     botStats = {
         servers: servers || 0,
         ping: ping || 0,
         status: "online",
         guildIds: guildIds || [],
+        uptime: uptime || 0,
         lastUpdated: new Date().toISOString()
     };
 
