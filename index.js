@@ -1389,8 +1389,33 @@ function saveNotifications() {
     }
 }
 
-// Load notifications on startup
+// User notification preferences storage
+let userNotificationPreferences = {};
+
+function loadUserPreferences() {
+    try {
+        const prefsPath = path.join(__dirname, 'notification_preferences.json');
+        if (fs.existsSync(prefsPath)) {
+            userNotificationPreferences = JSON.parse(fs.readFileSync(prefsPath, 'utf8'));
+        }
+    } catch (err) {
+        console.log('User preferences file not found, starting fresh');
+        userNotificationPreferences = {};
+    }
+}
+
+function saveUserPreferences() {
+    try {
+        const prefsPath = path.join(__dirname, 'notification_preferences.json');
+        fs.writeFileSync(prefsPath, JSON.stringify(userNotificationPreferences, null, 4));
+    } catch (err) {
+        console.error('Error saving user preferences:', err);
+    }
+}
+
+// Load notifications and preferences on startup
 loadNotifications();
+loadUserPreferences();
 
 // Endpoint for bot to POST premium data (for syncing)
 app.post("/api/premium/sync", (req, res) => {
@@ -1476,50 +1501,57 @@ app.post("/api/trials/send", (req, res) => {
             isGlobal: sendToAll || (targetUsers && targetUsers.length === 0)
         };
 
+        let sent = 0;
+        let skipped = 0;
+
+        const sendTrialToUser = (targetUserId) => {
+            // Check user preferences - default to true if not set
+            const userPrefs = userNotificationPreferences[String(targetUserId)] || { trials: true };
+            
+            // Only send if user has trials enabled
+            if (userPrefs.trials !== false) {
+                if (!notificationsData[String(targetUserId)]) {
+                    notificationsData[String(targetUserId)] = { notifications: [], gifts: [] };
+                }
+                notificationsData[String(targetUserId)].gifts.push({
+                    ...trial,
+                    userId: String(targetUserId)
+                });
+                sent++;
+            } else {
+                skipped++;
+            }
+        };
+
         if (sendToAll || (targetUsers && targetUsers.length === 0)) {
-            // Send individual copies to all known users
+            // Send individual copies to all known users who have trials enabled
             const allUserIds = Object.keys(knownUsers);
             if (allUserIds.length === 0) {
                 return res.status(400).json({ error: "No users have logged in yet. Send to specific user IDs instead." });
             }
             
             allUserIds.forEach(targetUserId => {
-                if (!notificationsData[String(targetUserId)]) {
-                    notificationsData[String(targetUserId)] = { notifications: [], gifts: [] };
-                }
-                notificationsData[String(targetUserId)].gifts.push({
-                    ...trial,
-                    userId: String(targetUserId)
-                });
+                sendTrialToUser(targetUserId);
             });
             saveNotifications();
         } else if (targetUsers && Array.isArray(targetUsers) && targetUsers.length > 0) {
             // Store for specific users
             targetUsers.forEach(targetUserId => {
-                if (!notificationsData[String(targetUserId)]) {
-                    notificationsData[String(targetUserId)] = { notifications: [], gifts: [] };
-                }
-                notificationsData[String(targetUserId)].gifts.push({
-                    ...trial,
-                    userId: String(targetUserId)
-                });
+                sendTrialToUser(targetUserId);
             });
             saveNotifications();
         } else {
             // Single user
-            if (!notificationsData[String(userId)]) {
-                notificationsData[String(userId)] = { notifications: [], gifts: [] };
-            }
-            notificationsData[String(userId)].gifts.push({
-                ...trial,
-                userId: String(userId)
-            });
+            sendTrialToUser(userId);
             saveNotifications();
         }
 
         res.json({ 
             success: true, 
-            message: sendToAll ? `Trial sent to ${Object.keys(knownUsers).length} users!` : `Trial sent successfully`,
+            message: `Trial sent to ${sent} users (${skipped} skipped due to disabled preferences)`,
+            sent,
+            skipped,
+            total: sent + skipped,
             trialId
         });
     } catch (err) {
@@ -1743,29 +1775,95 @@ app.post("/api/notifications/send", (req, res) => {
             isGlobal: sendToAll || (targetUsers && targetUsers.length === 0)
         };
 
-        if (sendToAll || (targetUsers && targetUsers.length === 0)) {
-            // Store as global broadcast
-            globalNotifications.push(notification);
-            saveGlobalData();
-        } else if (targetUsers && Array.isArray(targetUsers) && targetUsers.length > 0) {
-            // Send to specific users
-            targetUsers.forEach(userId => {
+        let sent = 0;
+        let skipped = 0;
+        const typeKey = type.toLowerCase();
+
+        const sendNotificationToUser = (userId) => {
+            // Check user preferences - default to true if not set
+            const userPrefs = userNotificationPreferences[String(userId)] || { 
+                updates: true, 
+                gifts: true, 
+                trials: true, 
+                community: true 
+            };
+            
+            // Only send if user has this notification type enabled
+            if (userPrefs[typeKey] !== false) {
                 if (!notificationsData[String(userId)]) {
                     notificationsData[String(userId)] = { notifications: [], gifts: [] };
                 }
                 notificationsData[String(userId)].notifications.push(notification);
+                sent++;
+            } else {
+                skipped++;
+            }
+        };
+
+        if (sendToAll || (targetUsers && targetUsers.length === 0)) {
+            // Store as global broadcast to all users (check preferences per user)
+            const allUserIds = Object.keys(knownUsers);
+            allUserIds.forEach(userId => {
+                sendNotificationToUser(userId);
+            });
+            saveNotifications();
+        } else if (targetUsers && Array.isArray(targetUsers) && targetUsers.length > 0) {
+            // Send to specific users (check preferences)
+            targetUsers.forEach(userId => {
+                sendNotificationToUser(userId);
             });
             saveNotifications();
         }
 
         res.json({ 
             success: true, 
-            message: sendToAll ? "Notification broadcast to all users!" : `Notification sent successfully`,
+            type,
+            message: `Notification sent to ${sent} users (${skipped} skipped due to disabled preferences)`,
+            sent,
+            skipped,
+            total: sent + skipped,
             notificationId
         });
     } catch (err) {
         console.error('Error sending notification:', err);
         res.status(500).json({ error: "Failed to send notification", details: err.message });
+    }
+});
+
+// Save user's notification preferences
+app.post("/api/user/:userId/notifications", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const { userId } = req.params;
+        const { updates, gifts, trials, community } = req.body;
+        
+        // Track this user as known
+        trackUser(userId);
+        
+        // Save preferences with defaults
+        userNotificationPreferences[String(userId)] = {
+            updates: updates !== false,
+            gifts: gifts !== false,
+            trials: trials !== false,
+            community: community !== false
+        };
+        
+        saveUserPreferences();
+        
+        res.json({ 
+            success: true, 
+            message: "Notification preferences saved",
+            preferences: userNotificationPreferences[String(userId)]
+        });
+    } catch (err) {
+        console.error('Error saving notification preferences:', err);
+        res.status(500).json({ error: "Failed to save preferences", details: err.message });
     }
 });
 
