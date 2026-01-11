@@ -1744,6 +1744,43 @@ app.get("/api/user/:userId/gifts", (req, res) => {
     }
 });
 
+// Claim a gift
+app.post("/api/gifts/claim", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const { userId, giftId } = req.body;
+        
+        if (!userId || !giftId) {
+            return res.status(400).json({ error: "userId and giftId are required" });
+        }
+        
+        // Find and mark the gift as claimed
+        const userNotifications = notificationsData[userId];
+        if (userNotifications && userNotifications.gifts) {
+            const gift = userNotifications.gifts.find(g => g.id === giftId);
+            if (gift) {
+                gift.claimed = true;
+                gift.claimedAt = Date.now();
+                saveNotifications();
+                res.json({ success: true, message: "Gift claimed successfully", gift });
+            } else {
+                res.status(404).json({ error: "Gift not found" });
+            }
+        } else {
+            res.status(404).json({ error: "No gifts found for this user" });
+        }
+    } catch (err) {
+        console.error('Error claiming gift:', err);
+        res.status(500).json({ error: "Failed to claim gift", details: err.message });
+    }
+});
+
 // Send a notification to users
 app.post("/api/notifications/send", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
@@ -1899,6 +1936,40 @@ app.get("/api/user/:userId/notifications", (req, res) => {
     } catch (err) {
         console.error('Error fetching notifications:', err);
         res.status(500).json({ error: "Failed to fetch notifications" });
+    }
+});
+
+// Mark all user notifications as read
+app.post("/api/user/:userId/notifications/read", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const { userId } = req.params;
+        
+        // Mark all user-specific notifications as read
+        if (notificationsData[String(userId)] && notificationsData[String(userId)].notifications) {
+            notificationsData[String(userId)].notifications.forEach(n => {
+                n.read = true;
+            });
+        }
+        
+        // Mark all global notifications as read for this user
+        globalNotifications.forEach(n => {
+            if (!n.readBy) n.readBy = [];
+            n.readBy.push(String(userId));
+        });
+        
+        saveNotifications();
+        
+        res.json({ success: true, message: "All notifications marked as read" });
+    } catch (err) {
+        console.error('Error marking notifications as read:', err);
+        res.status(500).json({ error: "Failed to mark notifications as read" });
     }
 });
 
