@@ -133,6 +133,33 @@ const groq = new Groq({
 
 app.options("*", cors());
 
+// Middleware to verify Discord token
+async function verifyDiscordToken(req, res, next) {
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (!authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const token = authHeader.substring(7);
+    
+    try {
+        const userRes = await fetch('https://discord.com/api/v10/users/@me', {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (!userRes.ok) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
+
+        const user = await userRes.json();
+        req.user = user;
+        next();
+    } catch (error) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+}
+
 app.post("/api/support/ai", async (req, res) => {
     try {
         const message = req.body?.message?.trim();
@@ -376,15 +403,8 @@ app.post("/api/premium-data/sync", (req, res) => {
 // ============ CHANNEL ENDPOINTS ============
 
 // Get channels for a guild
-app.get("/api/channels/:guildId", (req, res) => {
+app.get("/api/channels/:guildId", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
-    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
-    const authHeader = req.headers['authorization'] || '';
-    
-    // Verify authorization
-    if (authHeader !== `Bearer ${SECRET_KEY}`) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
 
     const channels = serverChannels[guildId] || [];
     res.json({ guildId, channels });
@@ -396,7 +416,7 @@ app.post("/api/channels/:guildId", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
     
-    // Verify authorization
+    // Verify authorization - this endpoint is called by bot, not frontend
     if (authHeader !== `Bearer ${SECRET_KEY}`) {
         return res.status(401).json({ error: "Unauthorized" });
     }
@@ -578,15 +598,8 @@ app.get('/api/guild/:guildId/members', async (req, res) => {
 // ============ LEVELING SYSTEM ENDPOINTS ============
 
 // Get leveling settings for a guild
-app.get("/api/leveling/:guildId/settings", (req, res) => {
+app.get("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
-    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
-    const authHeader = req.headers['authorization'] || '';
-    
-    // Verify authorization
-    if (authHeader !== `Bearer ${SECRET_KEY}`) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
 
     // Initialize global storage if needed
     if (!global.levelingSettings) {
@@ -608,15 +621,8 @@ app.get("/api/leveling/:guildId/settings", (req, res) => {
 });
 
 // Save leveling settings for a guild
-app.post("/api/leveling/:guildId/settings", (req, res) => {
+app.post("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
-    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
-    const authHeader = req.headers['authorization'] || '';
-    
-    // Verify authorization
-    if (authHeader !== `Bearer ${SECRET_KEY}`) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
 
     const { enabled, xp_per_message, vc_xp_per_minute, level_up_message, level_up_channel, allowed_xp_channels } = req.body;
 
@@ -667,15 +673,8 @@ app.get("/api/leveling/:guildId/leaderboard", (req, res) => {
 });
 
 // Get economy settings for a guild
-app.get("/api/economy/:guildId/settings", (req, res) => {
+app.get("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
-    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
-    const authHeader = req.headers['authorization'] || '';
-    
-    // Verify authorization
-    if (authHeader !== `Bearer ${SECRET_KEY}`) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
 
     // Initialize global storage if needed
     if (!global.economySettings) {
@@ -719,9 +718,8 @@ app.get("/api/economy/:guildId/settings", (req, res) => {
 });
 
 // Save economy settings for a guild
-app.post("/api/economy/:guildId/settings", (req, res) => {
+app.post("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
-    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
     
     // Verify authorization
@@ -847,15 +845,8 @@ app.post("/api/economy/:guildId/reset-balances", (req, res) => {
 // ========== WELCOME SETTINGS ENDPOINTS ==========
 
 // Get welcome settings for a guild
-app.get("/api/welcome/:guildId/settings", (req, res) => {
+app.get("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
-    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
-    const authHeader = req.headers['authorization'] || '';
-    
-    // Verify authorization
-    if (authHeader !== `Bearer ${SECRET_KEY}`) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
 
     // Initialize global storage if needed
     if (!global.welcomeSettings) {
@@ -884,15 +875,8 @@ app.get("/api/welcome/:guildId/settings", (req, res) => {
 });
 
 // Save welcome settings for a guild
-app.post("/api/welcome/:guildId/settings", (req, res) => {
+app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
-    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
-    const authHeader = req.headers['authorization'] || '';
-    
-    // Verify authorization
-    if (authHeader !== `Bearer ${SECRET_KEY}`) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
 
     const { enabled, use_embed, channel_id, member_count_channel_id, text, title, description, footer, thumbnail, image, color, member_goal, fields } = req.body;
 
@@ -973,15 +957,8 @@ app.get("/api/status-data", (req, res) => {
     }
 });
 
-app.get("/api/status/:guildId/settings", (req, res) => {
+app.get("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
-    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
-    const authHeader = req.headers['authorization'] || '';
-    
-    // Verify authorization
-    if (authHeader !== `Bearer ${SECRET_KEY}`) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
@@ -1021,15 +998,8 @@ app.get("/api/status/:guildId/settings", (req, res) => {
     }
 });
 
-app.post("/api/status/:guildId/settings", (req, res) => {
+app.post("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
-    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
-    const authHeader = req.headers['authorization'] || '';
-    
-    // Verify authorization
-    if (authHeader !== `Bearer ${SECRET_KEY}`) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
 
     const { enabled, user_id, channel_id, delay_seconds, offline_message, automatic, use_embed } = req.body;
 
