@@ -602,53 +602,40 @@ app.get("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
     try {
-        // Try to read from xp_settings.json file
         let xpSettings = {};
         const xpSettingsPath = path.join(__dirname, 'xp_settings.json');
         
-        try {
-            if (fs.existsSync(xpSettingsPath)) {
-                const fileContent = fs.readFileSync(xpSettingsPath, 'utf8');
-                xpSettings = JSON.parse(fileContent);
-            }
-        } catch (err) {
-            console.log('xp_settings.json not found, using defaults');
+        if (fs.existsSync(xpSettingsPath)) {
+            const fileContent = fs.readFileSync(xpSettingsPath, 'utf8');
+            xpSettings = JSON.parse(fileContent);
         }
 
         const defaultSettings = {
             enabled: false,
-            xpPerMessage: 10,
-            voiceXp: 10,
-            levelUpMessage: "🎉 {user} has reached Level {level}!",
-            levelUpChannel: null,
-            allowedChannels: []
+            xp_per_message: 10,
+            vc_xp_per_minute: 2,
+            level_up_message: "🎉 {user} reached level {level}!",
+            level_up_channel: null,
+            allowed_xp_channels: []
         };
 
-        // Get settings from file, convert snake_case back to camelCase for frontend
+        // Return snake_case directly for bot
         let settings = defaultSettings;
         if (xpSettings[guildId]) {
-            const fileSettings = xpSettings[guildId];
-            settings = {
-                enabled: fileSettings.enabled || false,
-                xpPerMessage: fileSettings.xp_per_message || 10,
-                voiceXp: fileSettings.vc_xp_per_minute || 10,
-                levelUpMessage: fileSettings.level_up_message || "🎉 {user} has reached Level {level}!",
-                levelUpChannel: fileSettings.level_up_channel || null,
-                allowedChannels: Array.isArray(fileSettings.allowed_xp_channels) ? fileSettings.allowed_xp_channels.join(', ') : ''
-            };
+            settings = xpSettings[guildId];
         }
 
-        res.json({ settings: settings });
+        res.json(settings);
     } catch (err) {
         console.error('Error loading leveling settings:', err);
-        res.json({ settings: {
+        res.json({
             enabled: false,
-            xpPerMessage: 10,
-            voiceXp: 10,
-            levelUpMessage: "🎉 {user} has reached Level {level}!",
-            levelUpChannel: null,
-            allowedChannels: []
-        }});
+            xp_per_message: 10,
+            vc_xp_per_minute: 2,
+            level_up_message: "🎉 {user} reached level {level}!",
+            level_up_channel: null,
+            allowed_xp_channels: []
+        });
     }
 });
 
@@ -741,7 +728,6 @@ app.get("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
     try {
-        // Try to read from economy_data.json file
         let economyData = { settings: {} };
         const economyFilePath = path.join(__dirname, 'economy_data.json');
         
@@ -752,32 +738,26 @@ app.get("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
 
         const defaultSettings = {
             enabled: false,
-            currencyPerMessage: 10,
-            currencySymbol: "💰",
-            startingAmount: 500
+            per_message: 5,
+            currency_symbol: "💰",
+            start: 500
         };
 
-        // Get settings from file, convert snake_case back to camelCase for frontend
+        // Return snake_case directly for bot
         let settings = defaultSettings;
         if (economyData.settings && economyData.settings[guildId]) {
-            const fileSettings = economyData.settings[guildId];
-            settings = {
-                enabled: fileSettings.enabled || false,
-                currencyPerMessage: fileSettings.per_message || 10,
-                currencySymbol: fileSettings.currency_symbol || "💰",
-                startingAmount: fileSettings.start || 500
-            };
+            settings = economyData.settings[guildId];
         }
 
-        res.json({ settings: settings });
+        res.json(settings);
     } catch (err) {
         console.error('Error loading economy settings:', err);
-        res.json({ settings: {
+        res.json({
             enabled: false,
-            currencyPerMessage: 10,
-            currencySymbol: "💰",
-            startingAmount: 500
-        }});
+            per_message: 5,
+            currency_symbol: "💰",
+            start: 500
+        });
     }
 });
 
@@ -917,51 +897,37 @@ app.get("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
         // Default settings
         const defaultSettings = {
             enabled: false,
-            useEmbed: false,
-            welcomeChannel: '',
-            messageText: 'Welcome to {server}, {user}!',
-            embedTitle: 'Welcome!',
-            embedDescription: 'Welcome to {server}! We\'re glad to have you here.',
-            embedFooter: 'Thanks for joining!',
-            embedThumbnail: '',
-            embedColor: '#5170ff',
-            embedAuthor: ''
+            use_embed: false,
+            welcome_channel: null,
+            message_text: 'Welcome to {server}, {user}!',
+            embed_title: 'Welcome!',
+            embed_description: 'Welcome to {server}! We\'re glad to have you here.',
+            embed_footer: 'Thanks for joining!',
+            embed_thumbnail: '',
+            embed_color: '#5170ff',
+            embed_author: ''
         };
 
         let settings = defaultSettings;
         
         if (welcomeData[guildId]) {
-            // Convert snake_case from file to camelCase for frontend
-            settings = {
-                enabled: welcomeData[guildId].enabled || false,
-                useEmbed: welcomeData[guildId].use_embed || false,
-                welcomeChannel: welcomeData[guildId].welcome_channel || '',
-                messageText: welcomeData[guildId].message_text || 'Welcome to {server}, {user}!',
-                embedTitle: welcomeData[guildId].embed_title || 'Welcome!',
-                embedDescription: welcomeData[guildId].embed_description || 'Welcome to {server}! We\'re glad to have you here.',
-                embedFooter: welcomeData[guildId].embed_footer || 'Thanks for joining!',
-                embedThumbnail: welcomeData[guildId].embed_thumbnail || '',
-                embedColor: welcomeData[guildId].embed_color || '#5170ff',
-                embedAuthor: welcomeData[guildId].embed_author || ''
-            };
+            settings = welcomeData[guildId];
         }
 
-        res.json({ settings: settings });
+        res.json(settings);
     } catch (err) {
         console.error('Error reading welcome settings:', err);
-        res.json({ 
-            settings: {
-                enabled: false,
-                useEmbed: false,
-                welcomeChannel: '',
-                messageText: 'Welcome to {server}, {user}!',
-                embedTitle: 'Welcome!',
-                embedDescription: 'Welcome to {server}! We\'re glad to have you here.',
-                embedFooter: 'Thanks for joining!',
-                embedThumbnail: '',
-                embedColor: '#5170ff',
-                embedAuthor: ''
-            }
+        res.json({
+            enabled: false,
+            use_embed: false,
+            welcome_channel: null,
+            message_text: 'Welcome to {server}, {user}!',
+            embed_title: 'Welcome!',
+            embed_description: 'Welcome to {server}! We\'re glad to have you here.',
+            embed_footer: 'Thanks for joining!',
+            embed_thumbnail: '',
+            embed_color: '#5170ff',
+            embed_author: ''
         });
     }
 });
@@ -1089,7 +1055,6 @@ app.get("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
     }
 
     try {
-        // Try to read from status_data.json
         let statusData = { settings: {} };
         const statusFilePath = path.join(__dirname, 'status_data.json');
         
@@ -1100,41 +1065,32 @@ app.get("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
 
         const defaultSettings = {
             enabled: false,
-            userToTrack: "",
-            trackingChannel: "",
-            delay: 60,
-            offlineMessage: "User is currently offline",
+            user_id: null,
+            channel_id: null,
+            delay_seconds: 0,
+            offline_message: "User is currently offline",
             automatic: false,
-            useEmbed: true
+            use_embed: true
         };
 
-        // Get settings from file, convert snake_case back to camelCase for frontend
+        // Return snake_case directly for bot
         let settings = defaultSettings;
         if (statusData.settings && statusData.settings[guildId]) {
-            const fileSettings = statusData.settings[guildId];
-            settings = {
-                enabled: fileSettings.enabled || false,
-                userToTrack: fileSettings.user_id || "",
-                trackingChannel: fileSettings.channel_id || "",
-                delay: fileSettings.delay_seconds || 60,
-                offlineMessage: fileSettings.offline_message || "User is currently offline",
-                automatic: fileSettings.automatic || false,
-                useEmbed: fileSettings.use_embed !== undefined ? fileSettings.use_embed : true
-            };
+            settings = statusData.settings[guildId];
         }
 
-        res.json({ settings: settings });
+        res.json(settings);
     } catch (err) {
         console.error('Error fetching status settings:', err);
-        res.json({ settings: {
+        res.json({
             enabled: false,
-            userToTrack: "",
-            trackingChannel: "",
-            delay: 60,
-            offlineMessage: "User is currently offline",
+            user_id: null,
+            channel_id: null,
+            delay_seconds: 0,
+            offline_message: "User is currently offline",
             automatic: false,
-            useEmbed: true
-        }});
+            use_embed: true
+        });
     }
 });
 
