@@ -624,7 +624,8 @@ app.get("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
 app.post("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
-    const { enabled, xp_per_message, vc_xp_per_minute, level_up_message, level_up_channel, allowed_xp_channels } = req.body;
+    // Map camelCase from frontend to snake_case for bot
+    const { enabled, xpPerMessage, voiceXp, levelUpMessage, levelUpChannel, allowedChannels } = req.body;
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
@@ -637,11 +638,11 @@ app.post("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
 
     global.levelingSettings[guildId] = {
         enabled: enabled || false,
-        xp_per_message: xp_per_message || 10,
-        vc_xp_per_minute: vc_xp_per_minute || 2,
-        level_up_message: level_up_message || "🎉 {user} has reached Level **{level}**!",
-        level_up_channel: level_up_channel || null,
-        allowed_xp_channels: allowed_xp_channels || [],
+        xp_per_message: xpPerMessage || 10,
+        vc_xp_per_minute: voiceXp || 10,
+        level_up_message: levelUpMessage || "🎉 {user} has reached Level {level}!",
+        level_up_channel: levelUpChannel || null,
+        allowed_xp_channels: allowedChannels ? (typeof allowedChannels === 'string' ? allowedChannels.split(',').map(s => s.trim()) : allowedChannels) : [],
         lastUpdated: new Date().toISOString()
     };
 
@@ -659,19 +660,19 @@ app.post("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
             console.log('Creating new xp_settings.json file');
         }
         
-        // Update settings with the correct format for the bot
+        // Update settings with proper snake_case keys for the bot
         xpSettings[guildId] = {
             enabled: enabled || false,
-            xp_per_message: xp_per_message || 10,
-            vc_xp_per_minute: vc_xp_per_minute || 2,
-            level_up_message: level_up_message || "🎉 {user} has reached Level **{level}**!",
-            level_up_channel: level_up_channel || null,
-            allowed_xp_channels: allowed_xp_channels || []
+            xp_per_message: xpPerMessage || 10,
+            vc_xp_per_minute: voiceXp || 10,
+            level_up_message: levelUpMessage || "🎉 {user} has reached Level {level}!",
+            level_up_channel: levelUpChannel || null,
+            allowed_xp_channels: allowedChannels ? (typeof allowedChannels === 'string' ? allowedChannels.split(',').map(s => s.trim()) : allowedChannels) : []
         };
         
         // Save to file
         fs.writeFileSync(xpSettingsPath, JSON.stringify(xpSettings, null, 4));
-        console.log(`✅ Leveling settings saved to file for guild ${guildId}`);
+        console.log(`✅ Leveling settings saved to xp_settings.json for guild ${guildId}:`, xpSettings[guildId]);
     } catch (err) {
         console.error('Error saving leveling settings to file:', err);
     }
@@ -752,6 +753,7 @@ app.get("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
 app.post("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
+    // Map camelCase from frontend to snake_case for bot
     const { enabled, currencyPerMessage, currencySymbol, startingAmount } = req.body;
 
     if (!guildId) {
@@ -765,13 +767,13 @@ app.post("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
 
     global.economySettings[guildId] = {
         enabled: enabled || false,
-        currencyPerMessage: currencyPerMessage || 10,
-        currencySymbol: currencySymbol || "💰",
-        startingAmount: startingAmount || 500,
+        per_message: currencyPerMessage || 10,
+        currency_symbol: currencySymbol || "💰",
+        start: startingAmount || 500,
         lastUpdated: new Date().toISOString()
     };
 
-    // Also save to economy_data.json file with the correct key format for the bot
+    // Also save to economy_data.json file for the bot to read
     try {
         let economyData = { balances: {}, settings: {} };
         const economyFilePath = path.join(__dirname, 'economy_data.json');
@@ -785,17 +787,17 @@ app.post("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
             console.log('Creating new economy_data.json file');
         }
         
-        // Update settings with the correct key names for the bot
+        // Update settings with proper snake_case keys for the bot
         economyData.settings[guildId] = {
-            currency_symbol: currencySymbol || "💰",
-            start: startingAmount || 500,
+            enabled: enabled || false,
             per_message: currencyPerMessage || 10,
-            enabled: enabled || false
+            currency_symbol: currencySymbol || "💰",
+            start: startingAmount || 500
         };
         
         // Save to file
         fs.writeFileSync(economyFilePath, JSON.stringify(economyData, null, 4));
-        console.log(`✅ Economy settings saved to file for guild ${guildId}`);
+        console.log(`✅ Economy settings saved to economy_data.json for guild ${guildId}:`, economyData.settings[guildId]);
     } catch (err) {
         console.error('Error saving economy settings to file:', err);
     }
@@ -1056,7 +1058,8 @@ app.get("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
 app.post("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
-    const { enabled, user_id, channel_id, delay_seconds, offline_message, automatic, use_embed } = req.body;
+    // Map camelCase from frontend to snake_case for bot
+    const { enabled, userToTrack, trackingChannel, delay, automatic, useEmbed, offlineMessage } = req.body;
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
@@ -1081,83 +1084,70 @@ app.post("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
         const oldMessageId = oldSettings.message_id;
         const oldChannelId = oldSettings.channel_id;
         
-        // Retrieved old settings for guild
-
-        // QUEUE DELETION BEFORE CLEARING MESSAGE ID
-        // Queue a delete action for the old message (if one exists) - check that it's not empty string and not "undefined"
+        // QUEUE DELETION BEFORE CLEARING MESSAGE ID if channel/message changed
         if (oldMessageId && oldMessageId !== "" && oldMessageId !== "undefined" && oldChannelId && oldChannelId !== "" && oldChannelId !== "undefined") {
-            // Attempting to queue deletion
-            try {
-                // Load pending posts file with proper structure
-                let pendingPosts = { posts: [] };
-                const pendingPath = path.join(__dirname, 'pending_posts.json');
-                
+            if (oldChannelId !== trackingChannel) {
                 try {
-                    if (fs.existsSync(pendingPath)) {
-                        const fileContent = fs.readFileSync(pendingPath, 'utf8');
-                        const parsed = JSON.parse(fileContent);
-                        // Handle both array format and object format
-                        if (Array.isArray(parsed)) {
-                            pendingPosts = { posts: parsed };
-
-                        } else if (parsed && typeof parsed === 'object' && parsed.posts) {
-                            pendingPosts = parsed;
-
+                    // Load pending posts file with proper structure
+                    let pendingPosts = { posts: [] };
+                    const pendingPath = path.join(__dirname, 'pending_posts.json');
+                    
+                    try {
+                        if (fs.existsSync(pendingPath)) {
+                            const fileContent = fs.readFileSync(pendingPath, 'utf8');
+                            const parsed = JSON.parse(fileContent);
+                            if (Array.isArray(parsed)) {
+                                pendingPosts = { posts: parsed };
+                            } else if (parsed && typeof parsed === 'object' && parsed.posts) {
+                                pendingPosts = parsed;
+                            }
                         }
+                    } catch (err) {
+                        console.log(`⚠️ Error reading pending_posts.json: ${err.message}, starting fresh`);
+                        pendingPosts = { posts: [] };
                     }
+                    
+                    // Ensure posts array exists
+                    if (!pendingPosts.posts) {
+                        pendingPosts.posts = [];
+                    }
+                    
+                    // Add delete action
+                    const deleteAction = {
+                        action: "delete",
+                        guildId: guildId,
+                        channelId: oldChannelId,
+                        messageId: oldMessageId
+                    };
+                    pendingPosts.posts.unshift(deleteAction);
+                    fs.writeFileSync(pendingPath, JSON.stringify(pendingPosts, null, 4));
                 } catch (err) {
-                    console.log(`⚠️ Error reading pending_posts.json: ${err.message}, starting fresh`);
-                    pendingPosts = { posts: [] };
+                    console.log(`⚠️ Error in delete queueing: ${err.message}`);
                 }
-                
-                // Ensure posts array exists
-                if (!pendingPosts.posts) {
-                    pendingPosts.posts = [];
-                }
-                
-                // Add delete action to the BEGINNING so it processes first (before new post)
-                const deleteAction = {
-                    action: "delete",
-                    guildId: guildId,
-                    channelId: oldChannelId,
-                    messageId: oldMessageId
-                };
-                pendingPosts.posts.unshift(deleteAction);
-
-                
-                fs.writeFileSync(pendingPath, JSON.stringify(pendingPosts, null, 4));
-
-            } catch (err) {
-                console.log(`⚠️ Error in delete queueing: ${err.message}`);
-                console.error(err);
-            }
-        } else {
-            if (!oldMessageId) {
-
             }
         }
         
-        // Now update the settings with new values and clear the message_id
+        // Now update the settings with proper snake_case keys for the bot
         statusData.settings[guildId] = {
-            enabled: enabled !== undefined ? enabled : true,
-            user_id: user_id || "",
-            channel_id: channel_id || "",
-            delay_seconds: delay_seconds || 30,
-            offline_message: offline_message || "",
-            automatic: automatic !== undefined ? automatic : false,
-            use_embed: use_embed !== undefined ? use_embed : true,
+            enabled: enabled || false,
+            user_id: userToTrack || "",
+            channel_id: trackingChannel || "",
+            delay_seconds: delay || 30,
+            offline_message: offlineMessage || "User is currently offline",
+            automatic: automatic || false,
+            use_embed: useEmbed || true,
             message_id: "", // Clear old message ID since new message will be posted
             created_at: oldSettings.created_at || new Date().toISOString()
         };
         
         // Save updated settings
         fs.writeFileSync(statusFilePath, JSON.stringify(statusData, null, 4));
-
+        console.log(`✅ Status settings saved to status_data.json for guild ${guildId}:`, statusData.settings[guildId]);
 
         res.json({ 
             success: true, 
             message: "Status tracking settings saved", 
-            settings: statusData.settings[guildId] 
+            settings: statusData.settings[guildId]
         });
     } catch (err) {
         console.error('Error saving status settings:', err);
