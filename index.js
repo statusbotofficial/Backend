@@ -143,12 +143,6 @@ async function verifyDiscordToken(req, res, next) {
 
     const token = authHeader.substring(7);
     
-    // Allow bot to authenticate with backend secret
-    if (token === process.env.BACKEND_SECRET || token === "status-bot-stats-secret-key") {
-        req.user = { isBot: true };
-        return next();
-    }
-    
     try {
         const userRes = await fetch('https://discord.com/api/v10/users/@me', {
             headers: { Authorization: `Bearer ${token}` }
@@ -746,7 +740,7 @@ app.get("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
             enabled: false,
             per_message: 5,
             currency_symbol: "💰",
-            starting_amount: 500
+            start: 500
         };
 
         // Return snake_case directly for bot
@@ -800,13 +794,9 @@ app.post("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
             if (fs.existsSync(economyFilePath)) {
                 const fileContent = fs.readFileSync(economyFilePath, 'utf8');
                 economyData = JSON.parse(fileContent);
-                // Ensure structure exists
-                if (!economyData.settings) economyData.settings = {};
-                if (!economyData.balances) economyData.balances = {};
             }
         } catch (err) {
             console.log('Creating new economy_data.json file');
-            economyData = { balances: {}, settings: {} };
         }
         
         // Update settings with proper snake_case keys for the bot
@@ -814,12 +804,12 @@ app.post("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
             enabled: enabled || false,
             per_message: currencyPerMessage || 10,
             currency_symbol: currencySymbol || "💰",
-            starting_amount: startingAmount || 500
+            start: startingAmount || 500
         };
         
         // Save to file
         fs.writeFileSync(economyFilePath, JSON.stringify(economyData, null, 4));
-        console.log(`✅ Economy settings saved to economy_data.json for guild ${guildId}:`, JSON.stringify(economyData.settings[guildId], null, 2));
+        console.log(`✅ Economy settings saved to economy_data.json for guild ${guildId}:`, economyData.settings[guildId]);
     } catch (err) {
         console.error('Error saving economy settings to file:', err);
     }
@@ -853,7 +843,7 @@ app.post("/api/economy/:guildId/reset-balances", verifyDiscordToken, (req, res) 
         }
 
         // Get the current starting amount for this guild
-        const startingAmount = economyData.settings[guildId]?.starting_amount || 500;
+        const startingAmount = economyData.settings[guildId]?.start || 500;
 
         // Reset all balances for this guild to the starting amount
         if (!economyData.balances[guildId]) {
@@ -897,41 +887,24 @@ app.get("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
             welcomeData = JSON.parse(fileContent);
         }
 
-        // Return snake_case directly for bot (convert from embed_ prefix to field names bot expects)
-        let settings = {
+        // Default settings
+        const defaultSettings = {
             enabled: false,
             use_embed: false,
-            channel_id: null,
-            member_count_channel_id: null,
-            member_goal_channel_id: null,
-            text: 'Welcome to our server, {user}!',
-            title: 'Welcome!',
-            description: 'Welcome to our server!',
-            footer: '',
-            thumbnail: 'https://cdn.discordapp.com/embed/avatars/0.png',
-            image: '',
-            color: '#5170ff',
-            member_goal: 0,
-            fields: []
+            welcome_channel: null,
+            message_text: 'Welcome to {server}, {user}!',
+            embed_title: 'Welcome!',
+            embed_description: 'Welcome to {server}! We\'re glad to have you here.',
+            embed_footer: 'Thanks for joining!',
+            embed_thumbnail: '',
+            embed_color: '#5170ff',
+            embed_author: ''
         };
+
+        let settings = defaultSettings;
         
         if (welcomeData[guildId]) {
-            settings = {
-                enabled: welcomeData[guildId].enabled || false,
-                use_embed: welcomeData[guildId].use_embed || false,
-                channel_id: welcomeData[guildId].welcome_channel || null,
-                member_count_channel_id: welcomeData[guildId].member_count_channel_id,
-                member_goal_channel_id: welcomeData[guildId].member_goal_channel_id,
-                text: welcomeData[guildId].message_text || 'Welcome to our server, {user}!',
-                title: welcomeData[guildId].embed_title || 'Welcome!',
-                description: welcomeData[guildId].embed_description || 'Welcome to our server!',
-                footer: welcomeData[guildId].embed_footer || '',
-                thumbnail: welcomeData[guildId].embed_thumbnail || 'https://cdn.discordapp.com/embed/avatars/0.png',
-                image: welcomeData[guildId].embed_image || '',
-                color: welcomeData[guildId].embed_color || '#5170ff',
-                member_goal: welcomeData[guildId].member_goal || 0,
-                fields: welcomeData[guildId].fields || []
-            };
+            settings = welcomeData[guildId];
         }
 
         res.json(settings);
@@ -940,18 +913,14 @@ app.get("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
         res.json({
             enabled: false,
             use_embed: false,
-            channel_id: null,
-            member_count_channel_id: null,
-            member_goal_channel_id: null,
-            text: 'Welcome to our server, {user}!',
-            title: 'Welcome!',
-            description: 'Welcome to our server!',
-            footer: '',
-            thumbnail: 'https://cdn.discordapp.com/embed/avatars/0.png',
-            image: '',
-            color: '#5170ff',
-            member_goal: 0,
-            fields: []
+            welcome_channel: null,
+            message_text: 'Welcome to {server}, {user}!',
+            embed_title: 'Welcome!',
+            embed_description: 'Welcome to {server}! We\'re glad to have you here.',
+            embed_footer: 'Thanks for joining!',
+            embed_thumbnail: '',
+            embed_color: '#5170ff',
+            embed_author: ''
         });
     }
 });
@@ -1137,12 +1106,9 @@ app.post("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
             if (fs.existsSync(statusFilePath)) {
                 const fileContent = fs.readFileSync(statusFilePath, 'utf8');
                 statusData = JSON.parse(fileContent);
-                // Ensure structure exists
-                if (!statusData.settings) statusData.settings = {};
             }
         } catch (err) {
             console.log('Creating new status_data.json file');
-            statusData = { settings: {} };
         }
 
         // Get the OLD settings BEFORE updating (to get the message_id)
