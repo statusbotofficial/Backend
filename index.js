@@ -829,6 +829,8 @@ app.post("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
 
 app.post("/api/economy/:guildId/reset-balances", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
+    
+    console.log(`🔄 Reset balances requested for guild ${guildId}`);
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
@@ -850,6 +852,7 @@ app.post("/api/economy/:guildId/reset-balances", verifyDiscordToken, (req, res) 
 
         // Get the current starting amount for this guild
         const startingAmount = economyData.settings[guildId]?.start || 500;
+        console.log(`📊 Guild ${guildId} starting amount: ${startingAmount}`);
 
         // Reset all balances for this guild to the starting amount
         if (!economyData.balances[guildId]) {
@@ -858,6 +861,8 @@ app.post("/api/economy/:guildId/reset-balances", verifyDiscordToken, (req, res) 
 
         // Get all users in this guild and reset their balances
         const users = Object.keys(economyData.balances[guildId]);
+        console.log(`👥 Found ${users.length} users in guild ${guildId}`);
+        
         users.forEach(userId => {
             economyData.balances[guildId][userId] = startingAmount;
         });
