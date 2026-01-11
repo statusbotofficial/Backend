@@ -601,23 +601,55 @@ app.get('/api/guild/:guildId/members', async (req, res) => {
 app.get("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
-    // Initialize global storage if needed
-    if (!global.levelingSettings) {
-        global.levelingSettings = {};
+    try {
+        // Try to read from xp_settings.json file
+        let xpSettings = {};
+        const xpSettingsPath = path.join(__dirname, 'xp_settings.json');
+        
+        try {
+            if (fs.existsSync(xpSettingsPath)) {
+                const fileContent = fs.readFileSync(xpSettingsPath, 'utf8');
+                xpSettings = JSON.parse(fileContent);
+            }
+        } catch (err) {
+            console.log('xp_settings.json not found, using defaults');
+        }
+
+        const defaultSettings = {
+            enabled: false,
+            xpPerMessage: 10,
+            voiceXp: 10,
+            levelUpMessage: "🎉 {user} has reached Level {level}!",
+            levelUpChannel: null,
+            allowedChannels: []
+        };
+
+        // Get settings from file, convert snake_case back to camelCase for frontend
+        let settings = defaultSettings;
+        if (xpSettings[guildId]) {
+            const fileSettings = xpSettings[guildId];
+            settings = {
+                enabled: fileSettings.enabled || false,
+                xpPerMessage: fileSettings.xp_per_message || 10,
+                voiceXp: fileSettings.vc_xp_per_minute || 10,
+                levelUpMessage: fileSettings.level_up_message || "🎉 {user} has reached Level {level}!",
+                levelUpChannel: fileSettings.level_up_channel || null,
+                allowedChannels: Array.isArray(fileSettings.allowed_xp_channels) ? fileSettings.allowed_xp_channels.join(', ') : ''
+            };
+        }
+
+        res.json({ settings: settings });
+    } catch (err) {
+        console.error('Error loading leveling settings:', err);
+        res.json({ settings: {
+            enabled: false,
+            xpPerMessage: 10,
+            voiceXp: 10,
+            levelUpMessage: "🎉 {user} has reached Level {level}!",
+            levelUpChannel: null,
+            allowedChannels: []
+        }});
     }
-
-    // Return stored settings or defaults if not stored
-    const defaultSettings = {
-        enabled: false,
-        xp_per_message: 10,
-        vc_xp_per_minute: 2,
-        level_up_message: "🎉 {user} has reached Level **{level}**!",
-        level_up_channel: null,
-        allowed_xp_channels: []
-    };
-
-    const settings = global.levelingSettings[guildId] || defaultSettings;
-    res.json(settings);
 });
 
 // Save leveling settings for a guild
@@ -708,45 +740,45 @@ app.get("/api/leveling/:guildId/leaderboard", (req, res) => {
 app.get("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
-    // Initialize global storage if needed
-    if (!global.economySettings) {
-        global.economySettings = {};
-    }
-
-    // Try to load from economy_data.json file first
     try {
+        // Try to read from economy_data.json file
+        let economyData = { settings: {} };
         const economyFilePath = path.join(__dirname, 'economy_data.json');
         
         if (fs.existsSync(economyFilePath)) {
             const fileContent = fs.readFileSync(economyFilePath, 'utf8');
-            const economyData = JSON.parse(fileContent);
-            
-            if (economyData.settings && economyData.settings[guildId]) {
-                const botSettings = economyData.settings[guildId];
-                // Convert bot format to API format
-                const settings = {
-                    enabled: botSettings.enabled || false,
-                    per_message: botSettings.per_message || 10,
-                    currency_symbol: botSettings.currency || "💰",
-                    starting_amount: botSettings.start || 500
-                };
-                return res.json(settings);
-            }
+            economyData = JSON.parse(fileContent);
         }
+
+        const defaultSettings = {
+            enabled: false,
+            currencyPerMessage: 10,
+            currencySymbol: "💰",
+            startingAmount: 500
+        };
+
+        // Get settings from file, convert snake_case back to camelCase for frontend
+        let settings = defaultSettings;
+        if (economyData.settings && economyData.settings[guildId]) {
+            const fileSettings = economyData.settings[guildId];
+            settings = {
+                enabled: fileSettings.enabled || false,
+                currencyPerMessage: fileSettings.per_message || 10,
+                currencySymbol: fileSettings.currency_symbol || "💰",
+                startingAmount: fileSettings.start || 500
+            };
+        }
+
+        res.json({ settings: settings });
     } catch (err) {
-        console.error('Error reading economy_data.json:', err);
+        console.error('Error loading economy settings:', err);
+        res.json({ settings: {
+            enabled: false,
+            currencyPerMessage: 10,
+            currencySymbol: "💰",
+            startingAmount: 500
+        }});
     }
-
-    // Return defaults if file not found or guild not configured
-    const defaultSettings = {
-        enabled: false,
-        per_message: 10,
-        currency_symbol: "💰",
-        starting_amount: 500
-    };
-
-    const settings = global.economySettings[guildId] || defaultSettings;
-    res.json(settings);
 });
 
 // Save economy settings for a guild
@@ -873,30 +905,65 @@ app.post("/api/economy/:guildId/reset-balances", (req, res) => {
 app.get("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
-    // Initialize global storage if needed
-    if (!global.welcomeSettings) {
-        global.welcomeSettings = {};
+    try {
+        let welcomeData = {};
+        const welcomeFilePath = path.join(__dirname, 'welcome_data.json');
+        
+        if (fs.existsSync(welcomeFilePath)) {
+            const fileContent = fs.readFileSync(welcomeFilePath, 'utf8');
+            welcomeData = JSON.parse(fileContent);
+        }
+
+        // Default settings
+        const defaultSettings = {
+            enabled: false,
+            useEmbed: false,
+            welcomeChannel: '',
+            messageText: 'Welcome to {server}, {user}!',
+            embedTitle: 'Welcome!',
+            embedDescription: 'Welcome to {server}! We\'re glad to have you here.',
+            embedFooter: 'Thanks for joining!',
+            embedThumbnail: '',
+            embedColor: '#5170ff',
+            embedAuthor: ''
+        };
+
+        let settings = defaultSettings;
+        
+        if (welcomeData[guildId]) {
+            // Convert snake_case from file to camelCase for frontend
+            settings = {
+                enabled: welcomeData[guildId].enabled || false,
+                useEmbed: welcomeData[guildId].use_embed || false,
+                welcomeChannel: welcomeData[guildId].welcome_channel || '',
+                messageText: welcomeData[guildId].message_text || 'Welcome to {server}, {user}!',
+                embedTitle: welcomeData[guildId].embed_title || 'Welcome!',
+                embedDescription: welcomeData[guildId].embed_description || 'Welcome to {server}! We\'re glad to have you here.',
+                embedFooter: welcomeData[guildId].embed_footer || 'Thanks for joining!',
+                embedThumbnail: welcomeData[guildId].embed_thumbnail || '',
+                embedColor: welcomeData[guildId].embed_color || '#5170ff',
+                embedAuthor: welcomeData[guildId].embed_author || ''
+            };
+        }
+
+        res.json({ settings: settings });
+    } catch (err) {
+        console.error('Error reading welcome settings:', err);
+        res.json({ 
+            settings: {
+                enabled: false,
+                useEmbed: false,
+                welcomeChannel: '',
+                messageText: 'Welcome to {server}, {user}!',
+                embedTitle: 'Welcome!',
+                embedDescription: 'Welcome to {server}! We\'re glad to have you here.',
+                embedFooter: 'Thanks for joining!',
+                embedThumbnail: '',
+                embedColor: '#5170ff',
+                embedAuthor: ''
+            }
+        });
     }
-
-    // Return stored settings or defaults if not stored
-    const defaultSettings = {
-        enabled: false,
-        use_embed: false,
-        channel_id: null,
-        member_count_channel_id: null,
-        text: "Welcome to our server, {user}!",
-        title: "Welcome!",
-        description: "Welcome to our server!",
-        footer: "",
-        thumbnail: "https://cdn.discordapp.com/embed/avatars/0.png",
-        image: "",
-        color: "#5170ff",
-        member_goal: 0,
-        fields: []
-    };
-
-    const settings = global.welcomeSettings[guildId] || defaultSettings;
-    res.json(settings);
 });
 
 // Save welcome settings for a guild
@@ -1026,32 +1093,48 @@ app.get("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
         let statusData = { settings: {} };
         const statusFilePath = path.join(__dirname, 'status_data.json');
         
-        try {
-            if (fs.existsSync(statusFilePath)) {
-                const fileContent = fs.readFileSync(statusFilePath, 'utf8');
-                statusData = JSON.parse(fileContent);
-            }
-        } catch (err) {
-            console.log('Status_data.json not found, creating new one');
+        if (fs.existsSync(statusFilePath)) {
+            const fileContent = fs.readFileSync(statusFilePath, 'utf8');
+            statusData = JSON.parse(fileContent);
         }
 
-        const settings = statusData.settings[guildId] || {
+        const defaultSettings = {
             enabled: false,
-            user_id: "",
-            channel_id: "",
-            delay_seconds: "60",
-            offline_message: "User is currently offline",
-            automatic: true,
-            use_embed: true
+            userToTrack: "",
+            trackingChannel: "",
+            delay: 60,
+            offlineMessage: "User is currently offline",
+            automatic: false,
+            useEmbed: true
         };
 
-        res.json({ 
-            success: true, 
-            settings: settings 
-        });
+        // Get settings from file, convert snake_case back to camelCase for frontend
+        let settings = defaultSettings;
+        if (statusData.settings && statusData.settings[guildId]) {
+            const fileSettings = statusData.settings[guildId];
+            settings = {
+                enabled: fileSettings.enabled || false,
+                userToTrack: fileSettings.user_id || "",
+                trackingChannel: fileSettings.channel_id || "",
+                delay: fileSettings.delay_seconds || 60,
+                offlineMessage: fileSettings.offline_message || "User is currently offline",
+                automatic: fileSettings.automatic || false,
+                useEmbed: fileSettings.use_embed !== undefined ? fileSettings.use_embed : true
+            };
+        }
+
+        res.json({ settings: settings });
     } catch (err) {
         console.error('Error fetching status settings:', err);
-        res.status(500).json({ error: "Failed to fetch settings", details: err.message });
+        res.json({ settings: {
+            enabled: false,
+            userToTrack: "",
+            trackingChannel: "",
+            delay: 60,
+            offlineMessage: "User is currently offline",
+            automatic: false,
+            useEmbed: true
+        }});
     }
 });
 
