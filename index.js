@@ -118,7 +118,8 @@ You may translate or reply in other languages if the user requests it.
 app.use(cors({
     origin: [
         "https://status-bot.xyz",
-        "https://www.status-bot.xyz"
+        "https://www.status-bot.xyz",
+        "https://status-bot-website.netlify.app"
     ],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"]
