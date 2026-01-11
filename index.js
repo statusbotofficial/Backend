@@ -630,7 +630,7 @@ app.post("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
         return res.status(400).json({ error: "guildId is required" });
     }
 
-    // Store settings in memory (in production, use a database)
+    // Store settings in memory
     if (!global.levelingSettings) {
         global.levelingSettings = {};
     }
@@ -644,6 +644,37 @@ app.post("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
         allowed_xp_channels: allowed_xp_channels || [],
         lastUpdated: new Date().toISOString()
     };
+
+    // Also save to xp_settings.json file for the bot to read
+    try {
+        let xpSettings = {};
+        const xpSettingsPath = path.join(__dirname, 'xp_settings.json');
+        
+        try {
+            if (fs.existsSync(xpSettingsPath)) {
+                const fileContent = fs.readFileSync(xpSettingsPath, 'utf8');
+                xpSettings = JSON.parse(fileContent);
+            }
+        } catch (err) {
+            console.log('Creating new xp_settings.json file');
+        }
+        
+        // Update settings with the correct format for the bot
+        xpSettings[guildId] = {
+            enabled: enabled || false,
+            xp_per_message: xp_per_message || 10,
+            vc_xp_per_minute: vc_xp_per_minute || 2,
+            level_up_message: level_up_message || "🎉 {user} has reached Level **{level}**!",
+            level_up_channel: level_up_channel || null,
+            allowed_xp_channels: allowed_xp_channels || []
+        };
+        
+        // Save to file
+        fs.writeFileSync(xpSettingsPath, JSON.stringify(xpSettings, null, 4));
+        console.log(`✅ Leveling settings saved to file for guild ${guildId}`);
+    } catch (err) {
+        console.error('Error saving leveling settings to file:', err);
+    }
 
     res.json({ 
         success: true, 
@@ -720,14 +751,8 @@ app.get("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
 // Save economy settings for a guild
 app.post("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
-    const authHeader = req.headers['authorization'] || '';
-    
-    // Verify authorization
-    if (authHeader !== `Bearer ${SECRET_KEY}`) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
 
-    const { enabled, per_message, currency_symbol, starting_amount } = req.body;
+    const { enabled, currencyPerMessage, currencySymbol, startingAmount } = req.body;
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
@@ -740,15 +765,14 @@ app.post("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
 
     global.economySettings[guildId] = {
         enabled: enabled || false,
-        per_message: per_message || 10,
-        currency_symbol: currency_symbol || "💰",
-        starting_amount: starting_amount || 500,
+        currencyPerMessage: currencyPerMessage || 10,
+        currencySymbol: currencySymbol || "💰",
+        startingAmount: startingAmount || 500,
         lastUpdated: new Date().toISOString()
     };
 
     // Also save to economy_data.json file with the correct key format for the bot
     try {
-        // Try to read existing economy_data.json
         let economyData = { balances: {}, settings: {} };
         const economyFilePath = path.join(__dirname, 'economy_data.json');
         
@@ -763,9 +787,9 @@ app.post("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
         
         // Update settings with the correct key names for the bot
         economyData.settings[guildId] = {
-            currency_symbol: currency_symbol || "💰",
-            start: starting_amount || 500,
-            per_message: per_message || 10,
+            currency_symbol: currencySymbol || "💰",
+            start: startingAmount || 500,
+            per_message: currencyPerMessage || 10,
             enabled: enabled || false
         };
         
@@ -774,7 +798,6 @@ app.post("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
         console.log(`✅ Economy settings saved to file for guild ${guildId}`);
     } catch (err) {
         console.error('Error saving economy settings to file:', err);
-        // Don't fail the response, just log the error
     }
 
     res.json({ 
@@ -878,7 +901,7 @@ app.get("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
 app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
-    const { enabled, use_embed, channel_id, member_count_channel_id, text, title, description, footer, thumbnail, image, color, member_goal, fields } = req.body;
+    const { enabled, useEmbed, welcomeChannel, messageText, embedTitle, embedDescription, embedFooter, embedThumbnail, embedColor, embedAuthor } = req.body;
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
@@ -891,20 +914,52 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
 
     global.welcomeSettings[guildId] = {
         enabled: enabled || false,
-        use_embed: use_embed || false,
-        channel_id: channel_id || null,
-        member_count_channel_id: member_count_channel_id || null,
-        text: text || "Welcome to our server, {user}!",
-        title: title || "Welcome!",
-        description: description || "Welcome to our server!",
-        footer: footer || "",
-        thumbnail: thumbnail || "https://cdn.discordapp.com/embed/avatars/0.png",
-        image: image || "",
-        color: color || "#5170ff",
-        member_goal: member_goal || 0,
-        fields: fields || [],
+        useEmbed: useEmbed || false,
+        welcomeChannel: welcomeChannel || null,
+        messageText: messageText || "Welcome to our server, {user}!",
+        embedTitle: embedTitle || "Welcome!",
+        embedDescription: embedDescription || "Welcome to our server!",
+        embedFooter: embedFooter || "",
+        embedThumbnail: embedThumbnail || "",
+        embedColor: embedColor || "#5170ff",
+        embedAuthor: embedAuthor || "",
         lastUpdated: new Date().toISOString()
     };
+
+    // Also save to welcome_data.json file for the bot to read
+    try {
+        let welcomeData = {};
+        const welcomeFilePath = path.join(__dirname, 'welcome_data.json');
+        
+        try {
+            if (fs.existsSync(welcomeFilePath)) {
+                const fileContent = fs.readFileSync(welcomeFilePath, 'utf8');
+                welcomeData = JSON.parse(fileContent);
+            }
+        } catch (err) {
+            console.log('Creating new welcome_data.json file');
+        }
+        
+        // Update settings
+        welcomeData[guildId] = {
+            enabled: enabled || false,
+            use_embed: useEmbed || false,
+            welcome_channel: welcomeChannel || null,
+            message_text: messageText || "Welcome to our server, {user}!",
+            embed_title: embedTitle || "Welcome!",
+            embed_description: embedDescription || "Welcome to our server!",
+            embed_footer: embedFooter || "",
+            embed_thumbnail: embedThumbnail || "",
+            embed_color: embedColor || "#5170ff",
+            embed_author: embedAuthor || ""
+        };
+        
+        // Save to file
+        fs.writeFileSync(welcomeFilePath, JSON.stringify(welcomeData, null, 4));
+        console.log(`✅ Welcome settings saved to file for guild ${guildId}`);
+    } catch (err) {
+        console.error('Error saving welcome settings to file:', err);
+    }
 
     res.json({ 
         success: true, 
