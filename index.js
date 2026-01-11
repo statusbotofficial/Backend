@@ -827,15 +827,8 @@ app.post("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
     });
 });
 
-app.post("/api/economy/:guildId/reset-balances", (req, res) => {
+app.post("/api/economy/:guildId/reset-balances", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
-    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
-    const authHeader = req.headers['authorization'] || '';
-    
-    // Verify authorization
-    if (authHeader !== `Bearer ${SECRET_KEY}`) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
