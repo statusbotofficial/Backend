@@ -823,8 +823,10 @@ app.post("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
 
 app.post("/api/economy/:guildId/reset-balances", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
+    console.log(`[RESET] Starting balance reset for guild: ${guildId}`);
 
     if (!guildId) {
+        console.log(`[RESET] Error: No guildId provided`);
         return res.status(400).json({ error: "guildId is required" });
     }
 
@@ -837,28 +839,35 @@ app.post("/api/economy/:guildId/reset-balances", verifyDiscordToken, (req, res) 
             if (fs.existsSync(economyFilePath)) {
                 const fileContent = fs.readFileSync(economyFilePath, 'utf8');
                 economyData = JSON.parse(fileContent);
+                console.log(`[RESET] Loaded economy_data.json`);
             }
         } catch (err) {
-            console.log('Economy_data.json not found, creating new one');
+            console.log('[RESET] Economy_data.json not found, creating new one');
         }
 
         // Get the current starting amount for this guild
         const startingAmount = economyData.settings[guildId]?.start || 500;
+        console.log(`[RESET] Starting amount: ${startingAmount}`);
 
         // Reset all balances for this guild to the starting amount
         if (!economyData.balances[guildId]) {
             economyData.balances[guildId] = {};
+            console.log(`[RESET] Guild balances object didn't exist, created new one`);
         }
 
         // Get all users in this guild and reset their balances
         const users = Object.keys(economyData.balances[guildId]);
+        console.log(`[RESET] Found ${users.length} users to reset`);
+        
         users.forEach(userId => {
+            const oldBalance = economyData.balances[guildId][userId];
             economyData.balances[guildId][userId] = startingAmount;
+            console.log(`[RESET] User ${userId}: ${oldBalance} -> ${startingAmount}`);
         });
 
         // Save to file
         fs.writeFileSync(economyFilePath, JSON.stringify(economyData, null, 4));
-        console.log(`✅ Economy balances reset for guild ${guildId}. All ${users.length} users set to ${startingAmount}`);
+        console.log(`[RESET] ✅ Saved economy_data.json`);
 
         res.json({ 
             success: true, 
@@ -867,7 +876,7 @@ app.post("/api/economy/:guildId/reset-balances", verifyDiscordToken, (req, res) 
             startingAmount: startingAmount
         });
     } catch (err) {
-        console.error('Error resetting economy balances:', err);
+        console.error('[RESET] Error resetting economy balances:', err);
         res.status(500).json({ error: "Failed to reset balances", details: err.message });
     }
 });
