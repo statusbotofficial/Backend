@@ -940,7 +940,7 @@ app.get("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
 app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
-    const { enabled, useEmbed, welcomeChannel, messageText, embedTitle, embedDescription, embedFooter, embedThumbnail, embedColor, embedAuthor } = req.body;
+    const { enabled, use_embed, channel_id, message_text, embed_title, embed_description, embed_footer, embed_thumbnail, embed_color, embed_author } = req.body;
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
@@ -952,16 +952,16 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
     }
 
     global.welcomeSettings[guildId] = {
-        enabled: enabled || false,
-        useEmbed: useEmbed || false,
-        welcomeChannel: welcomeChannel || null,
-        messageText: messageText || "Welcome to our server, {user}!",
-        embedTitle: embedTitle || "Welcome!",
-        embedDescription: embedDescription || "Welcome to our server!",
-        embedFooter: embedFooter || "",
-        embedThumbnail: embedThumbnail || "",
-        embedColor: embedColor || "#5170ff",
-        embedAuthor: embedAuthor || "",
+        enabled: enabled === true,
+        use_embed: use_embed === true,
+        channel_id: channel_id || null,
+        message_text: message_text || "Welcome to our server, {user}!",
+        embed_title: embed_title || "Welcome!",
+        embed_description: embed_description || "Welcome to our server!",
+        embed_footer: embed_footer || "",
+        embed_thumbnail: embed_thumbnail || "",
+        embed_color: embed_color || "#5170ff",
+        embed_author: embed_author || "",
         lastUpdated: new Date().toISOString()
     };
 
@@ -981,16 +981,16 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
         
         // Update settings
         welcomeData[guildId] = {
-            enabled: enabled || false,
-            use_embed: useEmbed || false,
-            welcome_channel: welcomeChannel || null,
-            message_text: messageText || "Welcome to our server, {user}!",
-            embed_title: embedTitle || "Welcome!",
-            embed_description: embedDescription || "Welcome to our server!",
-            embed_footer: embedFooter || "",
-            embed_thumbnail: embedThumbnail || "",
-            embed_color: embedColor || "#5170ff",
-            embed_author: embedAuthor || ""
+            enabled: enabled === true,
+            use_embed: use_embed === true,
+            channel_id: channel_id || null,
+            message_text: message_text || "Welcome to our server, {user}!",
+            embed_title: embed_title || "Welcome!",
+            embed_description: embed_description || "Welcome to our server!",
+            embed_footer: embed_footer || "",
+            embed_thumbnail: embed_thumbnail || "",
+            embed_color: embed_color || "#5170ff",
+            embed_author: embed_author || ""
         };
         
         // Save to file
