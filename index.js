@@ -1920,20 +1920,29 @@ app.post("/api/gifts/claim", (req, res) => {
                 gift.claimed = true;
                 gift.claimedAt = Date.now();
                 
-                // Activate premium for the user when gift is claimed
-                const userIdStr = String(userId);
-                if (!premiumCache[userIdStr]) {
-                    premiumCache[userIdStr] = {
-                        active: false,
-                        expiresAt: null
-                    };
-                }
-                premiumCache[userIdStr].active = true;
-                premiumCache[userIdStr].expiresAt = gift.premiumExpiresAt;
-                premiumCache[userIdStr].reason = "Trial Claimed";
+                // Create a pending claim for the bot to process
+                const claimId = `claim_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                const expiryTime = Math.floor(Date.now() / 1000) + (gift.premiumTrialDurationDays * 24 * 60 * 60);
+
+                pendingPremiumClaims[claimId] = {
+                    userId: String(userId),
+                    giftId: giftId,
+                    durationDays: gift.premiumTrialDurationDays,
+                    expiryTime,
+                    createdAt: Date.now(),
+                    processed: false,
+                    processedAt: null
+                };
                 
                 saveNotifications();
-                res.json({ success: true, message: "Gift claimed successfully! Premium activated.", gift });
+                savePendingClaims();
+                
+                res.json({ 
+                    success: true, 
+                    message: "Gift claimed successfully! Premium will be activated shortly.",
+                    claimId,
+                    gift 
+                });
             } else {
                 res.status(404).json({ error: "Gift not found" });
             }
