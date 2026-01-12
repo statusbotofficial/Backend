@@ -1174,13 +1174,13 @@ app.post("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
         
         // Now update the settings with proper snake_case keys for the bot
         statusData.settings[guildId] = {
-            enabled: enabled || false,
+            enabled: enabled === true,
             user_id: userToTrack || "",
             channel_id: trackingChannel || "",
             delay_seconds: delay || 30,
             offline_message: offlineMessage || "User is currently offline",
-            automatic: automatic || false,
-            use_embed: useEmbed || true,
+            automatic: automatic === true,
+            use_embed: useEmbed === true,
             message_id: "", // Always post new message
             created_at: oldSettings.created_at || new Date().toISOString()
         };
