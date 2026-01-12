@@ -1181,7 +1181,7 @@ app.post("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
             offline_message: offlineMessage || "User is currently offline",
             automatic: automatic || false,
             use_embed: useEmbed || true,
-            message_id: (oldChannelId === trackingChannel && oldMessageId) ? oldMessageId : "", // Keep message_id if channel didn't change
+            message_id: "", // Always post new message
             created_at: oldSettings.created_at || new Date().toISOString()
         };
         
