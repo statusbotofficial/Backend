@@ -902,14 +902,15 @@ app.get("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
         const defaultSettings = {
             enabled: false,
             use_embed: false,
-            welcome_channel: null,
-            message_text: 'Welcome to {server}, {user}!',
+            channel_id: null,
+            message_text: 'Welcome to {servername}, {user}!',
             embed_title: 'Welcome!',
-            embed_description: 'Welcome to {server}! We\'re glad to have you here.',
+            embed_description: 'Welcome to {servername}! We\'re glad to have you here.',
             embed_footer: 'Thanks for joining!',
-            embed_thumbnail: '',
+            embed_image: '',
             embed_color: '#5170ff',
-            embed_author: ''
+            embed_field_name: '',
+            embed_field_value: ''
         };
 
         let settings = defaultSettings;
@@ -924,14 +925,15 @@ app.get("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
         res.json({
             enabled: false,
             use_embed: false,
-            welcome_channel: null,
-            message_text: 'Welcome to {server}, {user}!',
+            channel_id: null,
+            message_text: 'Welcome to {servername}, {user}!',
             embed_title: 'Welcome!',
-            embed_description: 'Welcome to {server}! We\'re glad to have you here.',
+            embed_description: 'Welcome to {servername}! We\'re glad to have you here.',
             embed_footer: 'Thanks for joining!',
-            embed_thumbnail: '',
+            embed_image: '',
             embed_color: '#5170ff',
-            embed_author: ''
+            embed_field_name: '',
+            embed_field_value: ''
         });
     }
 });
@@ -940,7 +942,7 @@ app.get("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
 app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
-    const { enabled, use_embed, channel_id, message_text, embed_title, embed_description, embed_footer, embed_thumbnail, embed_color, embed_author } = req.body;
+    const { enabled, use_embed, channel_id, message_text, embed_title, embed_description, embed_footer, embed_image, embed_color, embed_field_name, embed_field_value } = req.body;
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
@@ -959,9 +961,10 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
         embed_title: embed_title || "Welcome!",
         embed_description: embed_description || "Welcome to our server!",
         embed_footer: embed_footer || "",
-        embed_thumbnail: embed_thumbnail || "",
+        embed_image: embed_image || "",
         embed_color: embed_color || "#5170ff",
-        embed_author: embed_author || "",
+        embed_field_name: embed_field_name || "",
+        embed_field_value: embed_field_value || "",
         lastUpdated: new Date().toISOString()
     };
 
@@ -988,9 +991,10 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
             embed_title: embed_title || "Welcome!",
             embed_description: embed_description || "Welcome to our server!",
             embed_footer: embed_footer || "",
-            embed_thumbnail: embed_thumbnail || "",
+            embed_image: embed_image || "",
             embed_color: embed_color || "#5170ff",
-            embed_author: embed_author || ""
+            embed_field_name: embed_field_name || "",
+            embed_field_value: embed_field_value || ""
         };
         
         // Save to file
