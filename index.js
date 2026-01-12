@@ -1003,7 +1003,7 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
         
         // Save to file
         fs.writeFileSync(welcomeFilePath, JSON.stringify(welcomeData, null, 4));
-        console.log(`✅ Welcome settings saved to file for guild ${guildId}`);
+        console.log(`✅ Welcome settings saved to file for guild ${guildId}:`, JSON.stringify(welcomeData[guildId], null, 2));
     } catch (err) {
         console.error('Error saving welcome settings to file:', err);
     }
@@ -1011,7 +1011,7 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
     res.json({ 
         success: true, 
         message: "Welcome settings saved", 
-        settings: global.welcomeSettings[guildId] 
+        settings: global.welcomeSettings[guildId]
     });
 });
 
