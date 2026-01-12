@@ -1074,7 +1074,8 @@ app.get("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
             delay_seconds: 0,
             offline_message: "User is currently offline",
             automatic: false,
-            use_embed: true
+            use_embed: true,
+            message_id: null
         };
 
         // Return snake_case directly for bot
@@ -1093,7 +1094,8 @@ app.get("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
             delay_seconds: 0,
             offline_message: "User is currently offline",
             automatic: false,
-            use_embed: true
+            use_embed: true,
+            message_id: null
         });
     }
 });
@@ -1179,7 +1181,7 @@ app.post("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
             offline_message: offlineMessage || "User is currently offline",
             automatic: automatic || false,
             use_embed: useEmbed || true,
-            message_id: "", // Clear old message ID since new message will be posted
+            message_id: (oldChannelId === trackingChannel && oldMessageId) ? oldMessageId : "", // Keep message_id if channel didn't change
             created_at: oldSettings.created_at || new Date().toISOString()
         };
         
