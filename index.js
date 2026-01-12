@@ -1877,9 +1877,14 @@ app.get("/api/user/:userId/gifts", (req, res) => {
 
         // Get user-specific gifts only
         let gifts = [];
-        const userNotifications = notificationsData[userId];
+        const userNotifications = notificationsData[String(userId)];
         if (userNotifications && userNotifications.gifts) {
-            gifts = userNotifications.gifts.filter(gift => gift.expiresAt > now && !gift.claimed);
+            gifts = userNotifications.gifts.filter(gift => {
+                // Check if gift hasn't expired and hasn't been claimed
+                // Use dashboardExpiresAt for dashboard expiration
+                const expiryTime = gift.dashboardExpiresAt || gift.expiresAt;
+                return expiryTime > now && !gift.claimed;
+            });
         }
 
         res.json({ gifts });
@@ -1906,7 +1911,7 @@ app.post("/api/gifts/claim", (req, res) => {
         }
         
         // Find and mark the gift as claimed
-        const userNotifications = notificationsData[userId];
+        const userNotifications = notificationsData[String(userId)];
         if (userNotifications && userNotifications.gifts) {
             const gift = userNotifications.gifts.find(g => g.id === giftId);
             if (gift) {
