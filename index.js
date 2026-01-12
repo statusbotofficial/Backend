@@ -907,6 +907,7 @@ app.get("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
             embed_title: 'Welcome!',
             embed_description: 'Welcome to {servername}! We\'re glad to have you here.',
             embed_footer: 'Thanks for joining!',
+            embed_thumbnail: '',
             embed_image: '',
             embed_color: '#5170ff',
             embed_field_name: '',
@@ -930,6 +931,7 @@ app.get("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
             embed_title: 'Welcome!',
             embed_description: 'Welcome to {servername}! We\'re glad to have you here.',
             embed_footer: 'Thanks for joining!',
+            embed_thumbnail: '',
             embed_image: '',
             embed_color: '#5170ff',
             embed_field_name: '',
@@ -942,7 +944,7 @@ app.get("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
 app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
-    const { enabled, use_embed, channel_id, message_text, embed_title, embed_description, embed_footer, embed_image, embed_color, embed_field_name, embed_field_value } = req.body;
+    const { enabled, use_embed, channel_id, message_text, embed_title, embed_description, embed_footer, embed_thumbnail, embed_image, embed_color, embed_field_name, embed_field_value } = req.body;
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
@@ -961,6 +963,7 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
         embed_title: embed_title || "Welcome!",
         embed_description: embed_description || "Welcome to our server!",
         embed_footer: embed_footer || "",
+        embed_thumbnail: embed_thumbnail || "",
         embed_image: embed_image || "",
         embed_color: embed_color || "#5170ff",
         embed_field_name: embed_field_name || "",
@@ -991,6 +994,7 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
             embed_title: embed_title || "Welcome!",
             embed_description: embed_description || "Welcome to our server!",
             embed_footer: embed_footer || "",
+            embed_thumbnail: embed_thumbnail || "",
             embed_image: embed_image || "",
             embed_color: embed_color || "#5170ff",
             embed_field_name: embed_field_name || "",
