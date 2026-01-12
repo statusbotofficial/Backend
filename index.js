@@ -2065,16 +2065,23 @@ app.get("/api/user/:userId/notifications", (req, res) => {
         trackUser(userId);
         
         const now = Date.now();
+        const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
-        // Get user-specific notifications
+        // Get user-specific notifications (including read ones, valid for 7 days)
         let notifications = [];
         const userNotifications = notificationsData[userId];
         if (userNotifications && userNotifications.notifications) {
-            notifications = userNotifications.notifications.filter(n => n.expiresAt > now && !n.read);
+            notifications = userNotifications.notifications.filter(n => {
+                const createdAt = n.createdAt || n.expiresAt - (n.durationDays * 24 * 60 * 60 * 1000);
+                return (now - createdAt) < SEVEN_DAYS_MS; // Show for 7 days
+            });
         }
 
-        // Add global broadcast notifications
-        const activeGlobalNotifications = globalNotifications.filter(n => n.expiresAt > now && !n.read);
+        // Add global broadcast notifications (valid for 7 days)
+        const activeGlobalNotifications = globalNotifications.filter(n => {
+            const createdAt = n.createdAt || n.expiresAt - (n.durationDays * 24 * 60 * 60 * 1000);
+            return (now - createdAt) < SEVEN_DAYS_MS; // Show for 7 days
+        });
         notifications = notifications.concat(activeGlobalNotifications);
 
         res.json({ notifications });
