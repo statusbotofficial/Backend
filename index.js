@@ -911,7 +911,10 @@ app.get("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
             embed_image: '',
             embed_color: '#5170ff',
             embed_field_name: '',
-            embed_field_value: ''
+            embed_field_value: '',
+            member_count_channel_id: null,
+            member_goal_channel_id: null,
+            member_goal: 0
         };
 
         let settings = defaultSettings;
@@ -935,7 +938,10 @@ app.get("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
             embed_image: '',
             embed_color: '#5170ff',
             embed_field_name: '',
-            embed_field_value: ''
+            embed_field_value: '',
+            member_count_channel_id: null,
+            member_goal_channel_id: null,
+            member_goal: 0
         });
     }
 });
@@ -944,7 +950,7 @@ app.get("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
 app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
-    const { enabled, use_embed, channel_id, message_text, embed_title, embed_description, embed_footer, embed_thumbnail, embed_image, embed_color, embed_field_name, embed_field_value } = req.body;
+    const { enabled, use_embed, channel_id, message_text, embed_title, embed_description, embed_footer, embed_thumbnail, embed_image, embed_color, embed_field_name, embed_field_value, member_count_channel_id, member_goal_channel_id, member_goal } = req.body;
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
@@ -968,6 +974,9 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
         embed_color: embed_color || "#5170ff",
         embed_field_name: embed_field_name || "",
         embed_field_value: embed_field_value || "",
+        member_count_channel_id: member_count_channel_id || null,
+        member_goal_channel_id: member_goal_channel_id || null,
+        member_goal: member_goal || 0,
         lastUpdated: new Date().toISOString()
     };
 
@@ -998,7 +1007,10 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
             embed_image: embed_image || "",
             embed_color: embed_color || "#5170ff",
             embed_field_name: embed_field_name || "",
-            embed_field_value: embed_field_value || ""
+            embed_field_value: embed_field_value || "",
+            member_count_channel_id: member_count_channel_id || null,
+            member_goal_channel_id: member_goal_channel_id || null,
+            member_goal: member_goal || 0
         };
         
         // Save to file
@@ -1012,6 +1024,51 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
         success: true, 
         message: "Welcome settings saved", 
         settings: global.welcomeSettings[guildId]
+    });
+});
+
+// Member goals endpoint
+app.post("/api/welcome/:guildId/member-goals", verifyDiscordToken, (req, res) => {
+    const { guildId } = req.params;
+    const { enabled, member_count_channel_id, member_goal_channel_id, member_goal } = req.body;
+
+    if (!guildId) {
+        return res.status(400).json({ error: "guildId is required" });
+    }
+
+    try {
+        let welcomeData = {};
+        const welcomeFilePath = path.join(__dirname, 'welcome_data.json');
+        
+        try {
+            if (fs.existsSync(welcomeFilePath)) {
+                const fileContent = fs.readFileSync(welcomeFilePath, 'utf8');
+                welcomeData = JSON.parse(fileContent);
+            }
+        } catch (err) {
+            console.log('Creating new welcome_data.json file');
+        }
+        
+        // Ensure guild settings exist
+        if (!welcomeData[guildId]) {
+            welcomeData[guildId] = {};
+        }
+        
+        // Update only member goals fields
+        welcomeData[guildId].member_count_channel_id = member_count_channel_id || null;
+        welcomeData[guildId].member_goal_channel_id = member_goal_channel_id || null;
+        welcomeData[guildId].member_goal = member_goal || 0;
+        
+        // Save to file
+        fs.writeFileSync(welcomeFilePath, JSON.stringify(welcomeData, null, 4));
+        console.log(`✅ Member goals settings saved to file for guild ${guildId}`);
+    } catch (err) {
+        console.error('Error saving member goals settings to file:', err);
+    }
+
+    res.json({ 
+        success: true, 
+        message: "Member goals settings saved"
     });
 });
 
