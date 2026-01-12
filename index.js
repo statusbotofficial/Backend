@@ -1622,6 +1622,8 @@ app.post("/api/trials/send", (req, res) => {
 
         const trial = {
             id: trialId,
+            name: `${premiumDays} Day Status Bot Premium Trial`,
+            code: trialId,
             dashboardDurationDays: dashboardDays,
             premiumTrialDurationDays: premiumDays,
             createdAt,
@@ -1917,8 +1919,21 @@ app.post("/api/gifts/claim", (req, res) => {
             if (gift) {
                 gift.claimed = true;
                 gift.claimedAt = Date.now();
+                
+                // Activate premium for the user when gift is claimed
+                const userIdStr = String(userId);
+                if (!premiumCache[userIdStr]) {
+                    premiumCache[userIdStr] = {
+                        active: false,
+                        expiresAt: null
+                    };
+                }
+                premiumCache[userIdStr].active = true;
+                premiumCache[userIdStr].expiresAt = gift.premiumExpiresAt;
+                premiumCache[userIdStr].reason = "Trial Claimed";
+                
                 saveNotifications();
-                res.json({ success: true, message: "Gift claimed successfully", gift });
+                res.json({ success: true, message: "Gift claimed successfully! Premium activated.", gift });
             } else {
                 res.status(404).json({ error: "Gift not found" });
             }
