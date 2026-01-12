@@ -1606,21 +1606,27 @@ app.post("/api/trials/send", (req, res) => {
     }
 
     try {
-        const { userId, durationDays, targetUsers, sendToAll } = req.body;
+        const { userId, dashboardDurationDays, premiumTrialDurationDays, targetUsers, sendToAll } = req.body;
         
-        if (!userId || !durationDays) {
-            return res.status(400).json({ error: "userId and durationDays are required" });
+        if (!userId) {
+            return res.status(400).json({ error: "userId is required" });
         }
+
+        const dashboardDays = dashboardDurationDays || 7;
+        const premiumDays = premiumTrialDurationDays || 7;
 
         const trialId = `trial_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const createdAt = Date.now();
-        const expiresAt = createdAt + (durationDays * 24 * 60 * 60 * 1000);
+        const dashboardExpiresAt = createdAt + (dashboardDays * 24 * 60 * 60 * 1000);
+        const premiumExpiresAt = createdAt + (premiumDays * 24 * 60 * 60 * 1000);
 
         const trial = {
             id: trialId,
-            durationDays,
+            dashboardDurationDays: dashboardDays,
+            premiumTrialDurationDays: premiumDays,
             createdAt,
-            expiresAt,
+            dashboardExpiresAt,
+            premiumExpiresAt,
             claimed: false,
             claimedAt: null,
             isGlobal: sendToAll || (targetUsers && targetUsers.length === 0)
@@ -1642,6 +1648,19 @@ app.post("/api/trials/send", (req, res) => {
                     ...trial,
                     userId: String(targetUserId)
                 });
+                
+                // Immediately activate premium for the user
+                const userIdStr = String(targetUserId);
+                if (!premiumCache[userIdStr]) {
+                    premiumCache[userIdStr] = {
+                        active: false,
+                        expiresAt: null
+                    };
+                }
+                premiumCache[userIdStr].active = true;
+                premiumCache[userIdStr].expiresAt = premiumExpiresAt;
+                premiumCache[userIdStr].reason = "Trial";
+                
                 sent++;
             } else {
                 skipped++;
@@ -1673,11 +1692,12 @@ app.post("/api/trials/send", (req, res) => {
 
         res.json({ 
             success: true, 
-            message: `Trial sent to ${sent} users (${skipped} skipped due to disabled preferences)`,
+            message: `Trial sent to ${sent} users (${skipped} skipped due to disabled preferences). Premium activated for ${sent} users until ${new Date(premiumExpiresAt).toISOString()}`,
             sent,
             skipped,
             total: sent + skipped,
-            trialId
+            trialId,
+            premiumExpiresAt
         });
     } catch (err) {
         console.error('Error creating trial:', err);
