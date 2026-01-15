@@ -650,7 +650,7 @@ app.post("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
     // Map camelCase from frontend to snake_case for bot
-    const { enabled, xpPerMessage, voiceXp, levelUpMessage, levelUpChannel, allowedChannels } = req.body;
+    const { enabled, xpPerMessage, voiceXp, xpCooldown, levelUpMessage, levelUpChannel, allowedChannels } = req.body;
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
@@ -665,6 +665,7 @@ app.post("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
         enabled: enabled || false,
         xp_per_message: xpPerMessage || 10,
         vc_xp_per_minute: voiceXp || 10,
+        xp_cooldown: xpCooldown || 60,
         level_up_message: levelUpMessage || "🎉 {user} has reached Level {level}!",
         level_up_channel: levelUpChannel || null,
         allowed_xp_channels: allowedChannels ? (typeof allowedChannels === 'string' ? allowedChannels.split(',').map(s => s.trim()) : allowedChannels) : [],
@@ -690,6 +691,7 @@ app.post("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
             enabled: enabled || false,
             xp_per_message: xpPerMessage || 10,
             vc_xp_per_minute: voiceXp || 10,
+            xp_cooldown: xpCooldown || 60,
             level_up_message: levelUpMessage || "🎉 {user} has reached Level {level}!",
             level_up_channel: levelUpChannel || null,
             allowed_xp_channels: allowedChannels ? (typeof allowedChannels === 'string' ? allowedChannels.split(',').map(s => s.trim()) : allowedChannels) : []
