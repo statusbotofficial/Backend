@@ -33,12 +33,6 @@ let serverChannels = {};
 // Premium data cache (populated by bot)
 let premiumCache = {};
 
-// Premium credits storage (synced from bot's premium_credits.json)
-let premiumCredits = {};
-
-// Pending gift requests from website (to be processed by bot)
-let pendingGiftRequests = {};
-
 // Known users who have logged into the website (for "send to all" distribution)
 let knownUsers = {};
 
@@ -2237,98 +2231,6 @@ app.get("/api/premium-credits/:userId", (req, res) => {
     const userCredits = premiumCredits[userId] || 0;
     
     res.json({ userId, credits: userCredits });
-});
-
-// Endpoint for website to gift premium (user spends a credit)
-app.post("/api/gift-premium", (req, res) => {
-    const authHeader = req.headers['authorization'] || '';
-    const token = authHeader.replace('Bearer ', '');
-    
-    // Verify user is authenticated
-    if (!token) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    try {
-        const { recipientId } = req.body;
-        
-        if (!recipientId) {
-            return res.status(400).json({ error: "Recipient ID required" });
-        }
-
-        // In a real implementation, you would:
-        // 1. Verify the sender's identity via the token
-        // 2. Check if sender has premium credits in the bot's database
-        // 3. Send a queue message to the bot to process the gift
-        // 4. Return confirmation
-
-        // For now, queue the gift request for the bot to process
-        const giftRequest = {
-            id: `gift-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            senderId: token, // Would be decoded from JWT in production
-            recipientId: recipientId,
-            timestamp: Date.now(),
-            status: 'pending'
-        };
-
-        // Store in pending gifts (would be synced with bot)
-        pendingGiftRequests[giftRequest.id] = giftRequest;
-
-        res.json({ 
-            success: true, 
-            message: "Gift sent successfully! The recipient will receive their premium gift shortly.",
-            giftId: giftRequest.id
-        });
-    } catch (err) {
-        console.error('Error processing gift:', err);
-        res.status(500).json({ error: "Failed to process gift" });
-    }
-});
-
-// Dev endpoint: Grant premium credits to a user
-app.post("/api/dev/grant-credits", (req, res) => {
-    const authHeader = req.headers['authorization'] || '';
-    const token = authHeader.replace('Bearer ', '');
-    const SECRET_KEY = 'status-bot-stats-secret-key';
-    
-    // Verify dev/owner access
-    if (token !== SECRET_KEY) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    try {
-        const { userId, amount } = req.body;
-        
-        if (!userId || !amount) {
-            return res.status(400).json({ error: "User ID and amount required" });
-        }
-
-        if (amount < 1) {
-            return res.status(400).json({ error: "Amount must be at least 1" });
-        }
-
-        // Update in-memory premium credits
-        premiumCredits = premiumCredits || {};
-        premiumCredits[userId] = (premiumCredits[userId] || 0) + amount;
-
-        // Queue a sync message to bot to update its premium_credits.json
-        const creditUpdate = {
-            userId,
-            action: 'add',
-            amount,
-            timestamp: Date.now(),
-            grantedBy: 'dev-console'
-        };
-
-        res.json({ 
-            success: true, 
-            message: `Granted ${amount} credit(s) to user ${userId}`,
-            newBalance: premiumCredits[userId]
-        });
-    } catch (err) {
-        console.error('Error granting credits:', err);
-        res.status(500).json({ error: "Failed to grant credits" });
-    }
 });
 
 const PORT = process.env.PORT || 3000;
