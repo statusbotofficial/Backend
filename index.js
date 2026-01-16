@@ -485,6 +485,33 @@ app.post("/api/premium/grant", (req, res) => {
         is_gift: false
     };
 
+    // Also write to pending grants file so bot can pick it up
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const pendingGrantsFile = path.join(__dirname, 'pending_grants.json');
+        
+        let pendingGrants = {};
+        if (fs.existsSync(pendingGrantsFile)) {
+            const data = fs.readFileSync(pendingGrantsFile, 'utf8');
+            pendingGrants = JSON.parse(data);
+        }
+        
+        pendingGrants[userId] = {
+            active: true,
+            activated_at: Math.floor(new Date().getTime() / 1000),
+            expiry: expiry,
+            duration_days: durationDays,
+            source: 'dashboard',
+            is_gift: false
+        };
+        
+        fs.writeFileSync(pendingGrantsFile, JSON.stringify(pendingGrants, null, 2));
+        console.log(`✓ Premium granted to user ${userId} and written to pending grants`);
+    } catch (err) {
+        console.error('Error writing pending grants:', err);
+    }
+
     res.json({ 
         success: true, 
         message: `Premium granted to user ${userId}`,
