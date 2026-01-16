@@ -344,13 +344,15 @@ app.get("/api/server-leaderboard/:guildId", (req, res) => {
     if (authHeader !== `Bearer ${SECRET_KEY}` && !req.query.token) {
         // For now, return mock data if not authorized
         const mockData = serverData[guildId] || {
-            allUsers: []
+            allUsers: [],
+            memberCount: 0
         };
         return res.json(mockData);
     }
 
     const leaderboard = serverData[guildId] || {
-        allUsers: []
+        allUsers: [],
+        memberCount: 0
     };
 
     res.json(leaderboard);
