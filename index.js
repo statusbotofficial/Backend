@@ -1429,6 +1429,30 @@ app.get("/api/status/pending-posts", (req, res) => {
     }
 });
 
+// Update pending posts list (called by bot after processing)
+app.post("/api/status/pending-posts", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify authorization
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const pendingPostsPath = path.join(__dirname, 'pending_posts.json');
+        const remainingPosts = req.body;
+        
+        // Save the remaining posts (after processed ones are removed)
+        fs.writeFileSync(pendingPostsPath, JSON.stringify({ posts: remainingPosts }, null, 4));
+        
+        res.json({ success: true, message: "Pending posts updated" });
+    } catch (err) {
+        console.error('Error updating pending posts:', err);
+        res.status(500).json({ error: "Failed to update pending posts", details: err.message });
+    }
+});
+
 app.post("/api/status/pending-posts/remove/:index", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
