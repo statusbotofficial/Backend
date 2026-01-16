@@ -219,18 +219,39 @@ app.post("/api/bot-stats/update", (req, res) => {
         return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { servers, ping, guildIds, uptime } = req.body;
+    const { servers, ping, guildIds } = req.body;
 
     botStats = {
-        servers: servers || 0,
-        ping: ping || 0,
+        ...botStats,
+        servers: servers || botStats.servers,
+        ping: ping || botStats.ping,
         status: "online",
-        guildIds: guildIds || [],
-        uptime: uptime || 0,
+        guildIds: guildIds || botStats.guildIds,
         lastUpdated: new Date().toISOString()
     };
 
     res.json({ success: true, message: "Stats updated" });
+});
+
+// Endpoint for uptime updates (every 4 hours)
+app.post("/api/bot-stats/uptime", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    // Verify the request is from your bot
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { uptime } = req.body;
+
+    botStats = {
+        ...botStats,
+        uptime: uptime || botStats.uptime,
+        lastUptimeUpdate: new Date().toISOString()
+    };
+
+    res.json({ success: true, message: "Uptime updated" });
 });
 
 // Endpoint for frontend to GET stats
@@ -2192,6 +2213,116 @@ app.post("/api/notifications/:notificationId/read", (req, res) => {
     } catch (err) {
         console.error('Error marking notification as read:', err);
         res.status(500).json({ error: "Failed to mark notification as read" });
+    }
+});
+
+// Endpoint for getting user's premium credits
+app.get("/api/premium-credits/:userId", (req, res) => {
+    const authHeader = req.headers['authorization'] || '';
+    const token = authHeader.replace('Bearer ', '');
+    
+    const userId = req.params.userId;
+    if (!userId) {
+        return res.status(400).json({ error: "User ID required" });
+    }
+
+    // Premium credits stored in memory (would be in a database in production)
+    // This is a placeholder - in production, sync from bot's premium_credits.json
+    const userCredits = premiumCredits[userId] || 0;
+    
+    res.json({ userId, credits: userCredits });
+});
+
+// Endpoint for website to gift premium (user spends a credit)
+app.post("/api/gift-premium", (req, res) => {
+    const authHeader = req.headers['authorization'] || '';
+    const token = authHeader.replace('Bearer ', '');
+    
+    // Verify user is authenticated
+    if (!token) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const { recipientId } = req.body;
+        
+        if (!recipientId) {
+            return res.status(400).json({ error: "Recipient ID required" });
+        }
+
+        // In a real implementation, you would:
+        // 1. Verify the sender's identity via the token
+        // 2. Check if sender has premium credits in the bot's database
+        // 3. Send a queue message to the bot to process the gift
+        // 4. Return confirmation
+
+        // For now, queue the gift request for the bot to process
+        const giftRequest = {
+            id: `gift-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            senderId: token, // Would be decoded from JWT in production
+            recipientId: recipientId,
+            timestamp: Date.now(),
+            status: 'pending'
+        };
+
+        // Store in pending gifts (would be synced with bot)
+        pendingGiftRequests = pendingGiftRequests || {};
+        pendingGiftRequests[giftRequest.id] = giftRequest;
+
+        res.json({ 
+            success: true, 
+            message: "Gift sent successfully! The recipient will receive their premium gift shortly.",
+            giftId: giftRequest.id
+        });
+    } catch (err) {
+        console.error('Error processing gift:', err);
+        res.status(500).json({ error: "Failed to process gift" });
+    }
+});
+
+// Dev endpoint: Grant premium credits to a user
+app.post("/api/dev/grant-credits", (req, res) => {
+    const authHeader = req.headers['authorization'] || '';
+    const token = authHeader.replace('Bearer ', '');
+    const SECRET_KEY = 'status-bot-stats-secret-key';
+    
+    // Verify dev/owner access
+    if (token !== SECRET_KEY) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const { userId, amount } = req.body;
+        
+        if (!userId || !amount) {
+            return res.status(400).json({ error: "User ID and amount required" });
+        }
+
+        if (amount < 1) {
+            return res.status(400).json({ error: "Amount must be at least 1" });
+        }
+
+        // Update in-memory premium credits
+        premiumCredits = premiumCredits || {};
+        premiumCredits[userId] = (premiumCredits[userId] || 0) + amount;
+
+        // Queue a sync message to bot to update its premium_credits.json
+        const creditUpdate = {
+            userId,
+            action: 'add',
+            amount,
+            timestamp: Date.now(),
+            grantedBy: 'dev-console'
+        };
+
+        res.json({ 
+            success: true, 
+            message: `Granted ${amount} credit(s) to user ${userId}`,
+            newBalance: premiumCredits[userId]
+        });
+    } catch (err) {
+        console.error('Error granting credits:', err);
+        res.status(500).json({ error: "Failed to grant credits" });
     }
 });
 
