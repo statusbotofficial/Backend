@@ -1335,6 +1335,33 @@ app.post("/api/status/:guildId/update-message", verifyDiscordToken, (req, res) =
     }
 
     try {
+        // First, update the status_data.json to store the override status
+        let statusData = { settings: {} };
+        const statusFilePath = path.join(__dirname, 'status_data.json');
+        
+        try {
+            if (fs.existsSync(statusFilePath)) {
+                const fileContent = fs.readFileSync(statusFilePath, 'utf8');
+                statusData = JSON.parse(fileContent);
+            }
+        } catch (err) {
+            console.log('Error reading status_data.json:', err.message);
+        }
+
+        // Find and update the override_status in status_data
+        for (const guild_id in statusData) {
+            if (guild_id.toString() === guildId.toString()) {
+                for (const user_id in statusData[guild_id]) {
+                    if (statusData[guild_id][user_id].message_id == messageId) {
+                        statusData[guild_id][user_id].override_status = overrideStatus || null;
+                        fs.writeFileSync(statusFilePath, JSON.stringify(statusData, null, 4));
+                        console.log(`✅ Updated override_status in status_data.json for message ${messageId}`);
+                        break;
+                    }
+                }
+            }
+        }
+
         // Queue the update as a pending post action
         let pendingPosts = { posts: [] };
         const pendingPath = path.join(__dirname, 'pending_posts.json');
