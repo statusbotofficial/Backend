@@ -1325,81 +1325,6 @@ app.post("/api/status/:guildId/message-id", (req, res) => {
     }
 });
 
-// Update status message with override status
-app.post("/api/status/:guildId/update-message", verifyDiscordToken, (req, res) => {
-    const { guildId } = req.params;
-    const { messageId, overrideStatus } = req.body;
-
-    if (!guildId || !messageId) {
-        return res.status(400).json({ error: "guildId and messageId are required" });
-    }
-
-    try {
-        // First, update the status_data.json to store the override status
-        let statusData = { settings: {} };
-        const statusFilePath = path.join(__dirname, 'status_data.json');
-        
-        try {
-            if (fs.existsSync(statusFilePath)) {
-                const fileContent = fs.readFileSync(statusFilePath, 'utf8');
-                statusData = JSON.parse(fileContent);
-            }
-        } catch (err) {
-            console.log('Error reading status_data.json:', err.message);
-        }
-
-        // Find and update the override_status in status_data
-        for (const guild_id in statusData) {
-            if (guild_id.toString() === guildId.toString()) {
-                for (const user_id in statusData[guild_id]) {
-                    if (statusData[guild_id][user_id].message_id == messageId) {
-                        statusData[guild_id][user_id].override_status = overrideStatus || null;
-                        fs.writeFileSync(statusFilePath, JSON.stringify(statusData, null, 4));
-                        console.log(`✅ Updated override_status in status_data.json for message ${messageId}`);
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Queue the update as a pending post action
-        let pendingPosts = { posts: [] };
-        const pendingPath = path.join(__dirname, 'pending_posts.json');
-        
-        try {
-            if (fs.existsSync(pendingPath)) {
-                const fileContent = fs.readFileSync(pendingPath, 'utf8');
-                const parsed = JSON.parse(fileContent);
-                if (Array.isArray(parsed)) {
-                    pendingPosts = { posts: parsed };
-                } else if (parsed && typeof parsed === 'object' && parsed.posts) {
-                    pendingPosts = parsed;
-                }
-            }
-        } catch (err) {
-            pendingPosts = { posts: [] };
-        }
-
-        // Add update action to queue
-        const updateAction = {
-            action: "update",
-            guildId: guildId,
-            messageId: messageId,
-            overrideStatus: overrideStatus
-        };
-        pendingPosts.posts.push(updateAction);
-        fs.writeFileSync(pendingPath, JSON.stringify(pendingPosts, null, 4));
-
-        res.json({ 
-            success: true, 
-            message: "Status update queued" 
-        });
-    } catch (err) {
-        console.error('Error queuing status update:', err);
-        res.status(500).json({ error: "Failed to queue update", details: err.message });
-    }
-});
-
 app.get("/api/status/pending-posts", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -1426,30 +1351,6 @@ app.get("/api/status/pending-posts", (req, res) => {
     } catch (err) {
         console.error('Error fetching pending posts:', err);
         res.status(500).json({ error: "Failed to fetch pending posts", details: err.message });
-    }
-});
-
-// Update pending posts list (called by bot after processing)
-app.post("/api/status/pending-posts", (req, res) => {
-    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
-    const authHeader = req.headers['authorization'] || '';
-    
-    // Verify authorization
-    if (authHeader !== `Bearer ${SECRET_KEY}`) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    try {
-        const pendingPostsPath = path.join(__dirname, 'pending_posts.json');
-        const remainingPosts = req.body;
-        
-        // Save the remaining posts (after processed ones are removed)
-        fs.writeFileSync(pendingPostsPath, JSON.stringify({ posts: remainingPosts }, null, 4));
-        
-        res.json({ success: true, message: "Pending posts updated" });
-    } catch (err) {
-        console.error('Error updating pending posts:', err);
-        res.status(500).json({ error: "Failed to update pending posts", details: err.message });
     }
 });
 
