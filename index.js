@@ -36,6 +36,9 @@ let premiumCache = {};
 // Premium credits storage (synced from bot's premium_credits.json)
 let premiumCredits = {};
 
+// Pending gift requests from website (to be processed by bot)
+let pendingGiftRequests = {};
+
 // Known users who have logged into the website (for "send to all" distribution)
 let knownUsers = {};
 
@@ -2269,7 +2272,6 @@ app.post("/api/gift-premium", (req, res) => {
         };
 
         // Store in pending gifts (would be synced with bot)
-        pendingGiftRequests = pendingGiftRequests || {};
         pendingGiftRequests[giftRequest.id] = giftRequest;
 
         res.json({ 
