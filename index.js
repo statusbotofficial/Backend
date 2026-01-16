@@ -33,6 +33,9 @@ let serverChannels = {};
 // Premium data cache (populated by bot)
 let premiumCache = {};
 
+// Premium credits storage (synced from bot's premium_credits.json)
+let premiumCredits = {};
+
 // Known users who have logged into the website (for "send to all" distribution)
 let knownUsers = {};
 
