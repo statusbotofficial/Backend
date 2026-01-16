@@ -1325,13 +1325,13 @@ app.post("/api/status/:guildId/message-id", (req, res) => {
     }
 });
 
-// Update status message with custom content
+// Update status message with override status
 app.post("/api/status/:guildId/update-message", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
-    const { messageId, customMessage } = req.body;
+    const { messageId, overrideStatus } = req.body;
 
-    if (!guildId || !messageId || !customMessage) {
-        return res.status(400).json({ error: "guildId, messageId, and customMessage are required" });
+    if (!guildId || !messageId) {
+        return res.status(400).json({ error: "guildId and messageId are required" });
     }
 
     try {
@@ -1358,17 +1358,17 @@ app.post("/api/status/:guildId/update-message", verifyDiscordToken, (req, res) =
             action: "update",
             guildId: guildId,
             messageId: messageId,
-            customMessage: customMessage
+            overrideStatus: overrideStatus
         };
         pendingPosts.posts.push(updateAction);
         fs.writeFileSync(pendingPath, JSON.stringify(pendingPosts, null, 4));
 
         res.json({ 
             success: true, 
-            message: "Status message update queued" 
+            message: "Status update queued" 
         });
     } catch (err) {
-        console.error('Error queuing status message update:', err);
+        console.error('Error queuing status update:', err);
         res.status(500).json({ error: "Failed to queue update", details: err.message });
     }
 });
