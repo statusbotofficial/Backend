@@ -1325,6 +1325,54 @@ app.post("/api/status/:guildId/message-id", (req, res) => {
     }
 });
 
+// Update status message with custom content
+app.post("/api/status/:guildId/update-message", verifyDiscordToken, (req, res) => {
+    const { guildId } = req.params;
+    const { messageId, customMessage } = req.body;
+
+    if (!guildId || !messageId || !customMessage) {
+        return res.status(400).json({ error: "guildId, messageId, and customMessage are required" });
+    }
+
+    try {
+        // Queue the update as a pending post action
+        let pendingPosts = { posts: [] };
+        const pendingPath = path.join(__dirname, 'pending_posts.json');
+        
+        try {
+            if (fs.existsSync(pendingPath)) {
+                const fileContent = fs.readFileSync(pendingPath, 'utf8');
+                const parsed = JSON.parse(fileContent);
+                if (Array.isArray(parsed)) {
+                    pendingPosts = { posts: parsed };
+                } else if (parsed && typeof parsed === 'object' && parsed.posts) {
+                    pendingPosts = parsed;
+                }
+            }
+        } catch (err) {
+            pendingPosts = { posts: [] };
+        }
+
+        // Add update action to queue
+        const updateAction = {
+            action: "update",
+            guildId: guildId,
+            messageId: messageId,
+            customMessage: customMessage
+        };
+        pendingPosts.posts.push(updateAction);
+        fs.writeFileSync(pendingPath, JSON.stringify(pendingPosts, null, 4));
+
+        res.json({ 
+            success: true, 
+            message: "Status message update queued" 
+        });
+    } catch (err) {
+        console.error('Error queuing status message update:', err);
+        res.status(500).json({ error: "Failed to queue update", details: err.message });
+    }
+});
+
 app.get("/api/status/pending-posts", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
