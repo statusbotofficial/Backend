@@ -429,6 +429,69 @@ app.post("/api/premium-data/sync", (req, res) => {
     res.json({ success: true, message: "Premium data synced" });
 });
 
+// Get all premium users
+app.get("/api/premium/users", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    // Convert premium cache to array format with user details
+    const users = Object.entries(premiumCache).map(([userId, data]) => ({
+        userId,
+        username: data.username || null,
+        active: data.active || false,
+        source: data.source || 'unknown',
+        expiry: data.expiry || null,
+        activated_at: data.activated_at || null,
+        duration_days: data.duration_days || 0,
+        is_gift: data.is_gift || false
+    }));
+
+    res.json({ users, total: users.length });
+});
+
+// Grant premium to a user
+app.post("/api/premium/grant", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { userId, durationDays = 30 } = req.body;
+
+    if (!userId) {
+        return res.status(400).json({ error: "userId is required" });
+    }
+
+    // Calculate expiry timestamp
+    let expiry = null;
+    if (durationDays > 0) {
+        const now = new Date();
+        expiry = Math.floor((now.getTime() + (durationDays * 24 * 60 * 60 * 1000)) / 1000);
+    }
+
+    // Update premium cache
+    premiumCache[userId] = {
+        active: true,
+        activated_at: Math.floor(new Date().getTime() / 1000),
+        expiry: expiry,
+        duration_days: durationDays,
+        source: 'dashboard',
+        is_gift: false
+    };
+
+    res.json({ 
+        success: true, 
+        message: `Premium granted to user ${userId}`,
+        expiry: expiry
+    });
+});
+
 // ============ CHANNEL ENDPOINTS ============
 
 // Get channels for a guild
