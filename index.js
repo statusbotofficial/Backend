@@ -909,6 +909,7 @@ app.post("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
         
         xpSettings[guildId] = {
             enabled: enabled || false,
+            leveling_type: body.levelingType || 'linear',
             xp_per_message: xpPerMessage || 10,
             vc_xp_per_minute: voiceXp || 10,
             xp_cooldown: xpCooldown || 60,
