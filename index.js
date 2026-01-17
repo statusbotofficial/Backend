@@ -462,36 +462,44 @@ app.post("/api/premium/grant", (req, res) => {
         return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { userId, durationDays = 30 } = req.body;
+    try {
+        const { userId, durationDays = 30 } = req.body;
 
-    if (!userId) {
-        return res.status(400).json({ error: "userId is required" });
+        if (!userId) {
+            return res.status(400).json({ error: "userId is required" });
+        }
+
+        const createdAt = Date.now();
+        const premiumExpiresAt = durationDays > 0 ? createdAt + (durationDays * 24 * 60 * 60 * 1000) : null;
+        const premiumExpiresAtSeconds = Math.floor((premiumExpiresAt || createdAt) / 1000);
+
+        const userIdStr = String(userId);
+
+        // Directly activate premium in cache with dashboard source (like purchased)
+        if (!premiumCache[userIdStr]) {
+            premiumCache[userIdStr] = {
+                active: false,
+                expiresAt: null
+            };
+        }
+        premiumCache[userIdStr].active = true;
+        premiumCache[userIdStr].expiresAt = premiumExpiresAtSeconds;
+        premiumCache[userIdStr].reason = "Dashboard";
+        premiumCache[userIdStr].source = "dashboard";
+        premiumCache[userIdStr].duration_days = durationDays;
+
+        console.log(`✓ Premium granted to user ${userId} (expires: ${premiumExpiresAt ? new Date(premiumExpiresAt).toISOString() : 'Never'})`);
+
+        res.json({ 
+            success: true, 
+            message: `Premium granted to user ${userId}`,
+            expiresAt: premiumExpiresAt ? new Date(premiumExpiresAt).toISOString() : "Permanent",
+            duration_days: durationDays
+        });
+    } catch (err) {
+        console.error('Error granting premium:', err);
+        res.status(500).json({ error: "Failed to grant premium", details: err.message });
     }
-
-    // Calculate expiry timestamp
-    let expiry = null;
-    if (durationDays > 0) {
-        const now = new Date();
-        expiry = Math.floor((now.getTime() + (durationDays * 24 * 60 * 60 * 1000)) / 1000);
-    }
-
-    // Update premium cache
-    premiumCache[userId] = {
-        active: true,
-        activated_at: Math.floor(new Date().getTime() / 1000),
-        expiry: expiry,
-        duration_days: durationDays,
-        source: 'dashboard',
-        is_gift: false
-    };
-
-    console.log(`✓ Premium granted to user ${userId}`);
-
-    res.json({ 
-        success: true, 
-        message: `Premium granted to user ${userId}`,
-        expiry: expiry
-    });
 });
 
 // ============ CHANNEL ENDPOINTS ============
