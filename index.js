@@ -430,7 +430,7 @@ app.post("/api/premium-data/sync", (req, res) => {
             active: premiumInfo.active || false,
             expiresAt: premiumInfo.expiry || null,  // Bot stores as 'expiry', we use 'expiresAt'
             source: premiumInfo.source || 'unknown',
-            reason: premiumInfo.source === 'booster' ? 'Server Booster' : 
+            reason: premiumInfo.source === 'server_booster' || premiumInfo.source === 'booster' ? 'Server Booster' : 
                     premiumInfo.source === 'gift' ? 'Gifted' :
                     premiumInfo.source === 'trial' ? 'Trial' :
                     premiumInfo.source === 'patreon' ? 'Patreon' :
@@ -504,6 +504,26 @@ app.post("/api/premium/grant", (req, res) => {
         premiumCache[userIdStr].reason = "Dashboard";
         premiumCache[userIdStr].source = "dashboard";
         premiumCache[userIdStr].duration_days = durationDays;
+
+        // Also write to premium_data.json file so the bot knows about it
+        try {
+            const premiumDataPath = path.join(__dirname, 'premium_data.json');
+            let premiumDataFile = {};
+            if (fs.existsSync(premiumDataPath)) {
+                const content = fs.readFileSync(premiumDataPath, 'utf8');
+                premiumDataFile = JSON.parse(content);
+            }
+            premiumDataFile[userIdStr] = {
+                active: true,
+                source: "dashboard",
+                expiry: premiumExpiresAtSeconds,
+                duration_days: durationDays,
+                activated_at: new Date().toISOString()
+            };
+            fs.writeFileSync(premiumDataPath, JSON.stringify(premiumDataFile, null, 4));
+        } catch (fileErr) {
+            console.error('Error writing to premium_data.json:', fileErr);
+        }
 
         saveNotifications();
 
