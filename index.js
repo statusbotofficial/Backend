@@ -429,19 +429,6 @@ app.post("/api/premium-data/sync", (req, res) => {
     res.json({ success: true, message: "Premium data synced" });
 });
 
-// Get current premium cache from backend (for bot to sync)
-app.get("/api/premium-data/get", (req, res) => {
-    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
-    const authHeader = req.headers['authorization'] || '';
-    
-    if (authHeader !== `Bearer ${SECRET_KEY}`) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    // Return premiumCache in the format the bot expects
-    res.json({ premiumData: premiumCache });
-});
-
 // Get all premium users
 app.get("/api/premium/users", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
