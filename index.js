@@ -429,6 +429,19 @@ app.post("/api/premium-data/sync", (req, res) => {
     res.json({ success: true, message: "Premium data synced" });
 });
 
+// Get current premium cache from backend (for bot to sync)
+app.get("/api/premium-data/get", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    // Return premiumCache in the format the bot expects
+    res.json({ premiumData: premiumCache });
+});
+
 // Get all premium users
 app.get("/api/premium/users", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
@@ -474,8 +487,32 @@ app.post("/api/premium/grant", (req, res) => {
         const premiumExpiresAtSeconds = Math.floor((premiumExpiresAt || createdAt) / 1000);
 
         const userIdStr = String(userId);
+        const purchaseId = `purchase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-        // Directly activate premium in cache with dashboard source (like purchased)
+        // Create purchased premium entry (auto-claimed, not showing as gift)
+        const purchase = {
+            id: purchaseId,
+            name: durationDays > 0 ? `${durationDays} Day Status Bot Premium` : "Permanent Status Bot Premium",
+            code: purchaseId,
+            durationDays: durationDays,
+            createdAt,
+            premiumExpiresAt: premiumExpiresAt,
+            claimed: true,
+            claimedAt: createdAt,
+            type: 'purchase',
+            isGlobal: false
+        };
+
+        // Add to gifts list (but marked as claimed so it won't show as unclaimed)
+        if (!notificationsData[userIdStr]) {
+            notificationsData[userIdStr] = { notifications: [], gifts: [] };
+        }
+        notificationsData[userIdStr].gifts.push({
+            ...purchase,
+            userId: userIdStr
+        });
+
+        // Directly activate premium in cache with dashboard source
         if (!premiumCache[userIdStr]) {
             premiumCache[userIdStr] = {
                 active: false,
@@ -488,13 +525,16 @@ app.post("/api/premium/grant", (req, res) => {
         premiumCache[userIdStr].source = "dashboard";
         premiumCache[userIdStr].duration_days = durationDays;
 
+        saveNotifications();
+
         console.log(`✓ Premium granted to user ${userId} (expires: ${premiumExpiresAt ? new Date(premiumExpiresAt).toISOString() : 'Never'})`);
 
         res.json({ 
             success: true, 
             message: `Premium granted to user ${userId}`,
             expiresAt: premiumExpiresAt ? new Date(premiumExpiresAt).toISOString() : "Permanent",
-            duration_days: durationDays
+            duration_days: durationDays,
+            purchaseId
         });
     } catch (err) {
         console.error('Error granting premium:', err);
