@@ -429,31 +429,7 @@ app.post("/api/premium-data/sync", (req, res) => {
     res.json({ success: true, message: "Premium data synced" });
 });
 
-// Get all premium users
-app.get("/api/premium/users", (req, res) => {
-    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
-    const authHeader = req.headers['authorization'] || '';
-    
-    if (authHeader !== `Bearer ${SECRET_KEY}`) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    // Convert premium cache to array format with user details
-    const users = Object.entries(premiumCache).map(([userId, data]) => ({
-        userId,
-        username: data.username || null,
-        active: data.active || false,
-        source: data.source || 'unknown',
-        expiry: data.expiry || null,
-        activated_at: data.activated_at || null,
-        duration_days: data.duration_days || 0,
-        is_gift: data.is_gift || false
-    }));
-
-    res.json({ users, total: users.length });
-});
-
-// Grant premium to a user
+// Grant premium to a user (like trials but purchased)
 app.post("/api/premium/grant", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -476,7 +452,7 @@ app.post("/api/premium/grant", (req, res) => {
         const userIdStr = String(userId);
         const purchaseId = `purchase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-        // Create purchased premium entry (auto-claimed, not showing as gift)
+        // Create purchased premium entry (like trial but auto-claimed)
         const purchase = {
             id: purchaseId,
             name: durationDays > 0 ? `${durationDays} Day Status Bot Premium` : "Permanent Status Bot Premium",
@@ -490,7 +466,7 @@ app.post("/api/premium/grant", (req, res) => {
             isGlobal: false
         };
 
-        // Add to gifts list (but marked as claimed so it won't show as unclaimed)
+        // Add to gifts list (marked as claimed so won't show as unclaimed)
         if (!notificationsData[userIdStr]) {
             notificationsData[userIdStr] = { notifications: [], gifts: [] };
         }
@@ -499,7 +475,7 @@ app.post("/api/premium/grant", (req, res) => {
             userId: userIdStr
         });
 
-        // Directly activate premium in cache with dashboard source
+        // Immediately activate premium in cache with dashboard source
         if (!premiumCache[userIdStr]) {
             premiumCache[userIdStr] = {
                 active: false,
@@ -526,6 +502,23 @@ app.post("/api/premium/grant", (req, res) => {
     } catch (err) {
         console.error('Error granting premium:', err);
         res.status(500).json({ error: "Failed to grant premium", details: err.message });
+    }
+});
+
+// Get all premium users data
+app.get("/api/premium-data", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        res.json({ premiumCache });
+    } catch (err) {
+        console.error('Error fetching premium data:', err);
+        res.status(500).json({ error: "Failed to fetch premium data" });
     }
 });
 
