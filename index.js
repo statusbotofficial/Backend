@@ -423,8 +423,25 @@ app.post("/api/premium-data/sync", (req, res) => {
         return res.status(400).json({ error: "premiumData is required" });
     }
 
-    // Update premium cache with all data from bot
-    premiumCache = premiumData;
+    // Transform bot's premium_data to match premiumCache structure
+    const transformedCache = {};
+    for (const [userId, premiumInfo] of Object.entries(premiumData)) {
+        transformedCache[userId] = {
+            active: premiumInfo.active || false,
+            expiresAt: premiumInfo.expiry || null,  // Bot stores as 'expiry', we use 'expiresAt'
+            source: premiumInfo.source || 'unknown',
+            reason: premiumInfo.source === 'booster' ? 'Server Booster' : 
+                    premiumInfo.source === 'gift' ? 'Gifted' :
+                    premiumInfo.source === 'trial' ? 'Trial' :
+                    premiumInfo.source === 'patreon' ? 'Patreon' :
+                    'Unknown',
+            duration_days: premiumInfo.duration_days || null,
+            is_gift: premiumInfo.is_gift || false
+        };
+    }
+    
+    // Update premium cache with transformed data
+    premiumCache = transformedCache;
     
     res.json({ success: true, message: "Premium data synced" });
 });
