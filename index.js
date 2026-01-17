@@ -33,6 +33,9 @@ let serverChannels = {};
 // Premium data cache (populated by bot)
 let premiumCache = {};
 
+// Pending dashboard premium grants (to be processed by bot)
+let pendingDashboardGrants = {};
+
 // Known users who have logged into the website (for "send to all" distribution)
 let knownUsers = {};
 
@@ -434,14 +437,17 @@ app.post("/api/premium-data/sync", (req, res) => {
                     premiumInfo.source === 'gift' ? 'Gifted' :
                     premiumInfo.source === 'trial' ? 'Trial' :
                     premiumInfo.source === 'patreon' ? 'Patreon' :
+                    premiumInfo.source === 'dashboard' ? 'Dashboard' :
                     'Unknown',
             duration_days: premiumInfo.duration_days || null,
             is_gift: premiumInfo.is_gift || false
         };
     }
     
-    // Update premium cache with transformed data
-    premiumCache = transformedCache;
+    // Merge with existing cache instead of replacing - preserves dashboard grants
+    for (const [userId, userCache] of Object.entries(transformedCache)) {
+        premiumCache[userId] = userCache;
+    }
     
     res.json({ success: true, message: "Premium data synced" });
 });
@@ -505,25 +511,16 @@ app.post("/api/premium/grant", (req, res) => {
         premiumCache[userIdStr].source = "dashboard";
         premiumCache[userIdStr].duration_days = durationDays;
 
-        // Also write to premium_data.json file so the bot knows about it
-        try {
-            const premiumDataPath = path.join(__dirname, 'premium_data.json');
-            let premiumDataFile = {};
-            if (fs.existsSync(premiumDataPath)) {
-                const content = fs.readFileSync(premiumDataPath, 'utf8');
-                premiumDataFile = JSON.parse(content);
-            }
-            premiumDataFile[userIdStr] = {
-                active: true,
-                source: "dashboard",
-                expiry: premiumExpiresAtSeconds,
-                duration_days: durationDays,
-                activated_at: new Date().toISOString()
-            };
-            fs.writeFileSync(premiumDataPath, JSON.stringify(premiumDataFile, null, 4));
-        } catch (fileErr) {
-            console.error('Error writing to premium_data.json:', fileErr);
-        }
+        // Add to pending grants for bot to process
+        const grantId = `grant_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        pendingDashboardGrants[grantId] = {
+            grantId,
+            userId: userIdStr,
+            source: "dashboard",
+            expiryTime: premiumExpiresAtSeconds,
+            durationDays,
+            createdAt: Date.now()
+        };
 
         saveNotifications();
 
@@ -556,6 +553,75 @@ app.get("/api/premium-data", (req, res) => {
     } catch (err) {
         console.error('Error fetching premium data:', err);
         res.status(500).json({ error: "Failed to fetch premium data" });
+    }
+});
+
+// Bot endpoint to fetch full premium data (includes dashboard grants)
+app.post("/api/premium-data/get", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        // Transform premiumCache back to bot format for the bot to use
+        const botFormat = {};
+        for (const [userId, cacheData] of Object.entries(premiumCache)) {
+            botFormat[userId] = {
+                active: cacheData.active || false,
+                source: cacheData.source || 'unknown',
+                expiry: cacheData.expiresAt || null,
+                duration_days: cacheData.duration_days || null,
+                activated_at: new Date().toISOString()
+            };
+        }
+        res.json({ premiumData: botFormat });
+    } catch (err) {
+        console.error('Error fetching premium data for bot:', err);
+        res.status(500).json({ error: "Failed to fetch premium data" });
+    }
+});
+
+// Bot endpoint to fetch pending dashboard premium grants
+app.get("/api/premium/pending-dashboard-grants", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const grants = Object.values(pendingDashboardGrants);
+        res.json({ grants: grants });
+    } catch (err) {
+        console.error('Error fetching pending grants:', err);
+        res.status(500).json({ error: "Failed to fetch pending grants" });
+    }
+});
+
+// Bot endpoint to mark dashboard grant as processed
+app.post("/api/premium/grant-processed", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const { grantId } = req.body;
+        if (grantId && pendingDashboardGrants[grantId]) {
+            delete pendingDashboardGrants[grantId];
+            res.json({ success: true });
+        } else {
+            res.status(400).json({ error: "Grant not found" });
+        }
+    } catch (err) {
+        console.error('Error marking grant as processed:', err);
+        res.status(500).json({ error: "Failed to mark grant as processed" });
     }
 });
 
