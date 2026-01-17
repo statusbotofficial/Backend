@@ -848,7 +848,8 @@ app.get("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
             vc_xp_per_minute: 2,
             level_up_message: "🎉 {user} reached level {level}!",
             level_up_channel: null,
-            allowed_xp_channels: []
+            allowed_xp_channels: [],
+            leveling_type: 'linear'
         };
 
         let settings = defaultSettings;
@@ -865,7 +866,8 @@ app.get("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
             vc_xp_per_minute: 2,
             level_up_message: "🎉 {user} reached level {level}!",
             level_up_channel: null,
-            allowed_xp_channels: []
+            allowed_xp_channels: [],
+            leveling_type: 'linear'
         });
     }
 });
@@ -873,7 +875,7 @@ app.get("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
 app.post("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
-    const { enabled, xpPerMessage, voiceXp, xpCooldown, levelUpMessage, levelUpChannel, allowedChannels } = req.body;
+    const { enabled, xpPerMessage, voiceXp, xpCooldown, levelUpMessage, levelUpChannel, allowedChannels, leveling_type } = req.body;
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
@@ -891,6 +893,7 @@ app.post("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
         level_up_message: levelUpMessage || "🎉 {user} has reached Level {level}!",
         level_up_channel: levelUpChannel || null,
         allowed_xp_channels: allowedChannels ? (typeof allowedChannels === 'string' ? allowedChannels.split(',').map(s => s.trim()) : allowedChannels) : [],
+        leveling_type: leveling_type || 'linear',
         lastUpdated: new Date().toISOString()
     };
 
@@ -909,7 +912,7 @@ app.post("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
         
         xpSettings[guildId] = {
             enabled: enabled || false,
-            leveling_type: body.levelingType || 'linear',
+            leveling_type: leveling_type || 'linear',
             xp_per_message: xpPerMessage || 10,
             vc_xp_per_minute: voiceXp || 10,
             xp_cooldown: xpCooldown || 60,
