@@ -168,7 +168,7 @@ app.use(cors({
     origin: [
         "https://status-bot.xyz",
         "https://www.status-bot.xyz",
-        "https://status-bot-website.netlify.app"
+        "https://status-bot.xyz"
     ],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"]
