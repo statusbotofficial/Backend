@@ -1,3 +1,7 @@
+// =======================
+// IMPORTS & CONFIGURATION
+// =======================
+
 import express from "express";
 import cors from "cors";
 import Groq from "groq-sdk";
@@ -10,13 +14,15 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// Data persistence directory
 const DATA_DIR = "./data";
 if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// Bot stats storage 
+// =======================
+// GLOBAL STATE VARIABLES
+// =======================
+
 let botStats = {
     servers: 0,
     ping: 0,
@@ -24,19 +30,14 @@ let botStats = {
     lastUpdated: null
 };
 
-// Server data storage (members, premium status, tracked users, leaderboards)
 let serverData = {};
 
-// Server channels storage
 let serverChannels = {};
 
-// Premium data cache (populated by bot)
 let premiumCache = {};
 
-// Pending dashboard premium grants (to be processed by bot)
 let pendingDashboardGrants = {};
 
-// Known users who have logged into the website (for "send to all" distribution)
 let knownUsers = {};
 
 function loadKnownUsers() {
@@ -70,6 +71,10 @@ function trackUser(userId) {
 }
 
 loadKnownUsers();
+
+// =======================
+// SYSTEM PROMPTS
+// =======================
 
 const SYSTEM_PROMPT = `
 You are the official AI support assistant for the Status Bot Discord bot.
@@ -118,6 +123,10 @@ LANGUAGES:
 You may translate or reply in other languages if the user requests it.
 `;
 
+// =======================
+// MIDDLEWARE & UTILITIES
+// =======================
+
 app.use(cors({
     origin: [
         "https://status-bot.xyz",
@@ -136,7 +145,10 @@ const groq = new Groq({
 
 app.options("*", cors());
 
-// Middleware to verify Discord token
+// =======================
+// AUTHENTICATION
+// =======================
+
 async function verifyDiscordToken(req, res, next) {
     const authHeader = req.headers['authorization'] || '';
     
@@ -146,7 +158,6 @@ async function verifyDiscordToken(req, res, next) {
 
     const token = authHeader.substring(7);
     
-    // Allow bot to authenticate with backend secret
     if (token === process.env.BACKEND_SECRET || token === "status-bot-stats-secret-key") {
         req.user = { isBot: true };
         return next();
@@ -168,6 +179,10 @@ async function verifyDiscordToken(req, res, next) {
         return res.status(401).json({ error: "Unauthorized" });
     }
 }
+
+// =======================
+// AI SUPPORT ENDPOINTS
+// =======================
 
 app.post("/api/support/ai", async (req, res) => {
     try {
@@ -212,12 +227,14 @@ app.get("/", (_, res) => {
     res.send("Status Bot Support API is running.");
 });
 
-// Endpoint for bot to POST stats
+// =======================
+// BOT STATS ENDPOINTS
+// =======================
+
 app.post("/api/bot-stats/update", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
     
-    // Verify the request is from your bot
     if (authHeader !== `Bearer ${SECRET_KEY}`) {
         return res.status(401).json({ error: "Unauthorized" });
     }
@@ -236,12 +253,10 @@ app.post("/api/bot-stats/update", (req, res) => {
     res.json({ success: true, message: "Stats updated" });
 });
 
-// Endpoint for uptime updates (every 4 hours)
 app.post("/api/bot-stats/uptime", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
     
-    // Verify the request is from your bot
     if (authHeader !== `Bearer ${SECRET_KEY}`) {
         return res.status(401).json({ error: "Unauthorized" });
     }
@@ -257,21 +272,20 @@ app.post("/api/bot-stats/uptime", (req, res) => {
     res.json({ success: true, message: "Uptime updated" });
 });
 
-// Endpoint for frontend to GET stats
 app.get("/api/bot-stats", (_, res) => {
     res.json(botStats);
 });
 
-// Endpoint to get all bot guilds
 app.get("/api/bot-guilds", (req, res) => {
-    // This endpoint returns the list of servers the bot is in
-    // The actual guild data is updated by the bot via the stats endpoint
     res.json({ 
         guilds: botStats.guildIds || []
     });
 });
 
-// Endpoint to check if a user has premium (user-specific)
+// =======================
+// PREMIUM ENDPOINTS
+// =======================
+
 app.get("/api/user-premium/:userId", (req, res) => {
     const { userId } = req.params;
     
@@ -279,7 +293,6 @@ app.get("/api/user-premium/:userId", (req, res) => {
         let hasPremium = false;
         let expiryDate = null;
         
-        // First check the premium cache (populated by bot)
         if (premiumCache[userId]) {
             const userPremiumInfo = premiumCache[userId];
             if (userPremiumInfo.active === true) {
@@ -289,7 +302,6 @@ app.get("/api/user-premium/:userId", (req, res) => {
                 }
             }
         } else {
-            // Fallback: Read premium data from file (for backward compatibility)
             const premiumDataPath = path.join(__dirname, 'premium_data.json');
             let premiumData = {};
             
@@ -298,12 +310,9 @@ app.get("/api/user-premium/:userId", (req, res) => {
                 premiumData = JSON.parse(rawData);
             }
             
-            // Check if user has premium
             const userPremiumInfo = premiumData[userId];
             if (userPremiumInfo) {
-                // Check if premium is active
                 if (userPremiumInfo.active === true) {
-                    // Check if not expired
                     if (!userPremiumInfo.expiry || Date.now() / 1000 < userPremiumInfo.expiry) {
                         hasPremium = true;
                         expiryDate = userPremiumInfo.expiry ? new Date(userPremiumInfo.expiry * 1000).toISOString() : null;
@@ -328,15 +337,16 @@ app.get("/api/user-premium/:userId", (req, res) => {
     }
 });
 
-// Endpoint to get server overview data
+// =======================
+// SERVER DATA ENDPOINTS
+// =======================
+
 app.get("/api/server-overview/:guildId", (req, res) => {
     const { guildId } = req.params;
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
     
-    // Verify authorization
     if (authHeader !== `Bearer ${SECRET_KEY}` && !req.query.token) {
-        // For now, return mock data if not authorized - in production, verify Discord token
         const mockData = serverData[guildId] || {
             memberCount: 0,
             userHasPremium: false,
@@ -358,15 +368,12 @@ app.get("/api/server-overview/:guildId", (req, res) => {
     res.json(overview);
 });
 
-// Endpoint to get full server leaderboard
 app.get("/api/server-leaderboard/:guildId", (req, res) => {
     const { guildId } = req.params;
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
     
-    // Verify authorization
     if (authHeader !== `Bearer ${SECRET_KEY}` && !req.query.token) {
-        // For now, return mock data if not authorized
         const mockData = serverData[guildId] || {
             allUsers: [],
             memberCount: 0
@@ -382,12 +389,10 @@ app.get("/api/server-leaderboard/:guildId", (req, res) => {
     res.json(leaderboard);
 });
 
-// Endpoint for bot to POST server data
 app.post("/api/server-data/update", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
     
-    // Verify the request is from your bot
     if (authHeader !== `Bearer ${SECRET_KEY}`) {
         return res.status(401).json({ error: "Unauthorized" });
     }
@@ -410,12 +415,10 @@ app.post("/api/server-data/update", (req, res) => {
     res.json({ success: true, message: "Server data updated" });
 });
 
-// Endpoint for bot to sync premium data
 app.post("/api/premium-data/sync", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
     
-    // Verify the request is from your bot
     if (authHeader !== `Bearer ${SECRET_KEY}`) {
         return res.status(401).json({ error: "Unauthorized" });
     }
@@ -426,7 +429,6 @@ app.post("/api/premium-data/sync", (req, res) => {
         return res.status(400).json({ error: "premiumData is required" });
     }
 
-    // Transform bot's premium_data to match premiumCache structure
     const transformedCache = {};
     for (const [userId, premiumInfo] of Object.entries(premiumData)) {
         transformedCache[userId] = {
@@ -444,7 +446,6 @@ app.post("/api/premium-data/sync", (req, res) => {
         };
     }
     
-    // Merge with existing cache instead of replacing - preserves dashboard grants
     for (const [userId, userCache] of Object.entries(transformedCache)) {
         premiumCache[userId] = userCache;
     }
@@ -452,7 +453,6 @@ app.post("/api/premium-data/sync", (req, res) => {
     res.json({ success: true, message: "Premium data synced" });
 });
 
-// Grant premium to a user (like trials but purchased)
 app.post("/api/premium/grant", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -475,7 +475,6 @@ app.post("/api/premium/grant", (req, res) => {
         const userIdStr = String(userId);
         const purchaseId = `purchase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-        // Create purchased premium entry (like trial but auto-claimed)
         const purchase = {
             id: purchaseId,
             name: durationDays > 0 ? `${durationDays} Day Status Bot Premium` : "Permanent Status Bot Premium",
@@ -489,7 +488,6 @@ app.post("/api/premium/grant", (req, res) => {
             isGlobal: false
         };
 
-        // Add to gifts list (marked as claimed so won't show as unclaimed)
         if (!notificationsData[userIdStr]) {
             notificationsData[userIdStr] = { notifications: [], gifts: [] };
         }
@@ -498,7 +496,6 @@ app.post("/api/premium/grant", (req, res) => {
             userId: userIdStr
         });
 
-        // Immediately activate premium in cache with dashboard source
         if (!premiumCache[userIdStr]) {
             premiumCache[userIdStr] = {
                 active: false,
@@ -511,7 +508,6 @@ app.post("/api/premium/grant", (req, res) => {
         premiumCache[userIdStr].source = "dashboard";
         premiumCache[userIdStr].duration_days = durationDays;
 
-        // Add to pending grants for bot to process
         const grantId = `grant_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         pendingDashboardGrants[grantId] = {
             grantId,
@@ -539,7 +535,6 @@ app.post("/api/premium/grant", (req, res) => {
     }
 });
 
-// Get all premium users data
 app.get("/api/premium-data", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -556,7 +551,6 @@ app.get("/api/premium-data", (req, res) => {
     }
 });
 
-// Bot endpoint to fetch full premium data (includes dashboard grants)
 app.post("/api/premium-data/get", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -566,7 +560,6 @@ app.post("/api/premium-data/get", (req, res) => {
     }
 
     try {
-        // Transform premiumCache back to bot format for the bot to use
         const botFormat = {};
         for (const [userId, cacheData] of Object.entries(premiumCache)) {
             botFormat[userId] = {
@@ -584,7 +577,6 @@ app.post("/api/premium-data/get", (req, res) => {
     }
 });
 
-// Bot endpoint to fetch pending dashboard premium grants
 app.get("/api/premium/pending-dashboard-grants", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -602,7 +594,6 @@ app.get("/api/premium/pending-dashboard-grants", (req, res) => {
     }
 });
 
-// Bot endpoint to mark dashboard grant as processed
 app.post("/api/premium/grant-processed", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -625,9 +616,6 @@ app.post("/api/premium/grant-processed", (req, res) => {
     }
 });
 
-// ============ CHANNEL ENDPOINTS ============
-
-// Get channels for a guild
 app.get("/api/channels/:guildId", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
@@ -635,13 +623,11 @@ app.get("/api/channels/:guildId", verifyDiscordToken, (req, res) => {
     res.json({ guildId, channels });
 });
 
-// Update channels for a guild (bot sends this)
 app.post("/api/channels/:guildId", (req, res) => {
     const { guildId } = req.params;
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
     
-    // Verify authorization - this endpoint is called by bot, not frontend
     if (authHeader !== `Bearer ${SECRET_KEY}`) {
         return res.status(401).json({ error: "Unauthorized" });
     }
@@ -661,16 +647,16 @@ app.post("/api/channels/:guildId", (req, res) => {
     });
 });
 
-// ============ USER RESOLUTION ENDPOINT ============
+// =======================
+// USER & MEMBER ENDPOINTS
+// =======================
 
-// Resolve a user reference (mention, username, or ID) to a Discord user ID
 app.post("/api/resolve-user/:guildId", (req, res) => {
     const { guildId } = req.params;
     const { userReference } = req.body;
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
     
-    // Verify authorization
     if (authHeader !== `Bearer ${SECRET_KEY}`) {
         return res.status(401).json({ error: "Unauthorized" });
     }
@@ -683,26 +669,20 @@ app.post("/api/resolve-user/:guildId", (req, res) => {
         let userId = null;
         const ref = userReference.trim();
         
-        // Check if it's a mention like <@123456789>
         const mentionMatch = ref.match(/<@!?(\d+)>/);
         if (mentionMatch) {
             userId = mentionMatch[1];
         } 
-        // Check if it's a numeric ID
         else if (/^\d+$/.test(ref)) {
             userId = ref;
         }
-        // Check if it's @username or just username - simple fallback
         else if (ref.startsWith('@')) {
-            // For now, ask user to use numeric ID since we can't access guild members from backend
             return res.status(400).json({ 
                 error: "Username resolution unavailable",
                 message: "Please use a numeric user ID or copy a proper Discord mention (right-click user > Copy User ID)"
             });
         } 
-        // Plain username without @
         else if (/^[a-zA-Z0-9_]+$/.test(ref)) {
-            // For now, ask user to use numeric ID since we can't access guild members from backend
             return res.status(400).json({ 
                 error: "Username resolution unavailable",
                 message: "Please use a numeric user ID or copy a proper Discord mention (right-click user > Copy User ID)"
@@ -726,11 +706,9 @@ app.post("/api/resolve-user/:guildId", (req, res) => {
     }
 });
 
-// Cache for guild members (with TTL of 5 minutes)
 let guildMembersCache = {};
 const MEMBERS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-// Retry function with exponential backoff
 async function fetchWithRetry(url, options, maxRetries = 5) {
     let lastError;
     
@@ -738,7 +716,6 @@ async function fetchWithRetry(url, options, maxRetries = 5) {
         try {
             const response = await fetch(url, options);
             
-            // If it's a rate limit error, wait and retry
             if (response.status === 429) {
                 const retryAfter = response.headers.get('Retry-After') || (Math.pow(2, attempt + 1) * 1000);
                 const delayMs = parseInt(retryAfter);
@@ -746,12 +723,10 @@ async function fetchWithRetry(url, options, maxRetries = 5) {
                 continue;
             }
             
-            // If successful, return response
             if (response.ok) {
                 return response;
             }
             
-            // Other errors, just return the response
             return response;
         } catch (err) {
             lastError = err;
@@ -765,25 +740,21 @@ async function fetchWithRetry(url, options, maxRetries = 5) {
     throw lastError || new Error('Max retries exceeded');
 }
 
-// Get guild members list
 app.get('/api/guild/:guildId/members', async (req, res) => {
     const { guildId } = req.params;
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
     
-    // Verify authorization
     if (authHeader !== `Bearer ${SECRET_KEY}`) {
         return res.status(401).json({ error: "Unauthorized" });
     }
 
     try {
-        // Check if members are cached and cache is still valid
         if (guildMembersCache[guildId] && Date.now() - guildMembersCache[guildId].timestamp < MEMBERS_CACHE_TTL) {
             console.log(`✅ Returning cached members for guild ${guildId}`);
             return res.json({ members: guildMembersCache[guildId].data });
         }
 
-        // Query Discord API to get guild members with retry logic
         const response = await fetchWithRetry(
             `https://discord.com/api/v10/guilds/${guildId}/members?limit=1000`,
             {
@@ -800,14 +771,12 @@ app.get('/api/guild/:guildId/members', async (req, res) => {
 
         const members = await response.json();
         
-        // Map members to id and username
         const memberList = members.map(member => ({
             id: member.user.id,
             username: member.user.username,
             displayName: member.nick || member.user.username
         }));
 
-        // Cache the members
         guildMembersCache[guildId] = {
             data: memberList,
             timestamp: Date.now()
@@ -820,9 +789,10 @@ app.get('/api/guild/:guildId/members', async (req, res) => {
     }
 });
 
-// ============ LEVELING SYSTEM ENDPOINTS ============
+// =======================
+// LEVELING ENDPOINTS
+// =======================
 
-// Get leveling settings for a guild
 app.get("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
@@ -844,7 +814,6 @@ app.get("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
             allowed_xp_channels: []
         };
 
-        // Return snake_case directly for bot
         let settings = defaultSettings;
         if (xpSettings[guildId]) {
             settings = xpSettings[guildId];
@@ -864,18 +833,15 @@ app.get("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
     }
 });
 
-// Save leveling settings for a guild
 app.post("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
-    // Map camelCase from frontend to snake_case for bot
     const { enabled, xpPerMessage, voiceXp, xpCooldown, levelUpMessage, levelUpChannel, allowedChannels } = req.body;
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
     }
 
-    // Store settings in memory
     if (!global.levelingSettings) {
         global.levelingSettings = {};
     }
@@ -891,7 +857,6 @@ app.post("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
         lastUpdated: new Date().toISOString()
     };
 
-    // Also save to xp_settings.json file for the bot to read
     try {
         let xpSettings = {};
         const xpSettingsPath = path.join(__dirname, 'xp_settings.json');
@@ -905,7 +870,6 @@ app.post("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
             console.log('Creating new xp_settings.json file');
         }
         
-        // Update settings with proper snake_case keys for the bot
         xpSettings[guildId] = {
             enabled: enabled || false,
             xp_per_message: xpPerMessage || 10,
@@ -916,7 +880,6 @@ app.post("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
             allowed_xp_channels: allowedChannels ? (typeof allowedChannels === 'string' ? allowedChannels.split(',').map(s => s.trim()) : allowedChannels) : []
         };
         
-        // Save to file
         fs.writeFileSync(xpSettingsPath, JSON.stringify(xpSettings, null, 4));
         console.log(`✅ Leveling settings saved to xp_settings.json for guild ${guildId}:`, xpSettings[guildId]);
     } catch (err) {
@@ -930,18 +893,15 @@ app.post("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
     });
 });
 
-// Get leveling leaderboard for a guild
 app.get("/api/leveling/:guildId/leaderboard", (req, res) => {
     const { guildId } = req.params;
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
     
-    // Verify authorization
     if (authHeader !== `Bearer ${SECRET_KEY}`) {
         return res.status(401).json({ error: "Unauthorized" });
     }
 
-    // Return leaderboard data stored in serverData
     const leaderboard = serverData[guildId]?.allUsers || [];
 
     res.json({ 
@@ -950,7 +910,10 @@ app.get("/api/leveling/:guildId/leaderboard", (req, res) => {
     });
 });
 
-// Get economy settings for a guild
+// =======================
+// ECONOMY ENDPOINTS
+// =======================
+
 app.get("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
@@ -970,7 +933,6 @@ app.get("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
             start: 500
         };
 
-        // Return snake_case directly for bot
         let settings = defaultSettings;
         if (economyData.settings && economyData.settings[guildId]) {
             settings = economyData.settings[guildId];
@@ -988,18 +950,15 @@ app.get("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
     }
 });
 
-// Save economy settings for a guild
 app.post("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
-    // Map camelCase from frontend to snake_case for bot
     const { enabled, currencyPerMessage, currencySymbol, startingAmount } = req.body;
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
     }
 
-    // Store settings in memory
     if (!global.economySettings) {
         global.economySettings = {};
     }
@@ -1012,7 +971,6 @@ app.post("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
         lastUpdated: new Date().toISOString()
     };
 
-    // Also save to economy_data.json file for the bot to read
     try {
         let economyData = { balances: {}, settings: {} };
         const economyFilePath = path.join(__dirname, 'economy_data.json');
@@ -1026,7 +984,6 @@ app.post("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
             console.log('Creating new economy_data.json file');
         }
         
-        // Update settings with proper snake_case keys for the bot
         economyData.settings[guildId] = {
             enabled: enabled || false,
             per_message: currencyPerMessage || 10,
@@ -1034,7 +991,6 @@ app.post("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
             start: startingAmount || 500
         };
         
-        // Save to file
         fs.writeFileSync(economyFilePath, JSON.stringify(economyData, null, 4));
         console.log(`✅ Economy settings saved to economy_data.json for guild ${guildId}:`, economyData.settings[guildId]);
     } catch (err) {
@@ -1058,7 +1014,6 @@ app.post("/api/economy/:guildId/reset-balances", verifyDiscordToken, (req, res) 
     }
 
     try {
-        // Read existing economy_data.json
         let economyData = { balances: {}, settings: {} };
         const economyFilePath = path.join(__dirname, 'economy_data.json');
         
@@ -1071,16 +1026,13 @@ app.post("/api/economy/:guildId/reset-balances", verifyDiscordToken, (req, res) 
             console.log('Economy_data.json not found, creating new one');
         }
 
-        // Get the current starting amount for this guild
         const startingAmount = economyData.settings[guildId]?.start || 500;
         console.log(`📊 Guild ${guildId} starting amount: ${startingAmount}`);
 
-        // Reset all balances for this guild to the starting amount
         if (!economyData.balances[guildId]) {
             economyData.balances[guildId] = {};
         }
 
-        // Get all users in this guild and reset their balances
         const users = Object.keys(economyData.balances[guildId]);
         console.log(`👥 Found ${users.length} users in guild ${guildId}`);
         
@@ -1088,7 +1040,6 @@ app.post("/api/economy/:guildId/reset-balances", verifyDiscordToken, (req, res) 
             economyData.balances[guildId][userId] = startingAmount;
         });
 
-        // Save to file
         fs.writeFileSync(economyFilePath, JSON.stringify(economyData, null, 4));
         console.log(`✅ Economy balances reset for guild ${guildId}. All ${users.length} users set to ${startingAmount}`);
 
@@ -1104,9 +1055,10 @@ app.post("/api/economy/:guildId/reset-balances", verifyDiscordToken, (req, res) 
     }
 });
 
-// ========== WELCOME SETTINGS ENDPOINTS ==========
+// =======================
+// WELCOME ENDPOINTS
+// =======================
 
-// Get welcome settings for a guild
 app.get("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
@@ -1119,7 +1071,6 @@ app.get("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
             welcomeData = JSON.parse(fileContent);
         }
 
-        // Default settings
         const defaultSettings = {
             enabled: false,
             use_embed: false,
@@ -1167,7 +1118,6 @@ app.get("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
     }
 });
 
-// Save welcome settings for a guild
 app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
@@ -1177,7 +1127,6 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
         return res.status(400).json({ error: "guildId is required" });
     }
 
-    // Initialize global storage if needed
     if (!global.welcomeSettings) {
         global.welcomeSettings = {};
     }
@@ -1201,7 +1150,6 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
         lastUpdated: new Date().toISOString()
     };
 
-    // Also save to welcome_data.json file for the bot to read
     try {
         let welcomeData = {};
         const welcomeFilePath = path.join(__dirname, 'welcome_data.json');
@@ -1215,7 +1163,6 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
             console.log('Creating new welcome_data.json file');
         }
         
-        // Update settings
         welcomeData[guildId] = {
             enabled: enabled === true,
             use_embed: use_embed === true,
@@ -1234,7 +1181,6 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
             member_goal: member_goal || 0
         };
         
-        // Save to file
         fs.writeFileSync(welcomeFilePath, JSON.stringify(welcomeData, null, 4));
         console.log(`✅ Welcome settings saved to file for guild ${guildId}:`, JSON.stringify(welcomeData[guildId], null, 2));
     } catch (err) {
@@ -1248,7 +1194,6 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
     });
 });
 
-// Member goals endpoint
 app.post("/api/welcome/:guildId/member-goals", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
     const { enabled, member_count_channel_id, member_goal_channel_id, member_goal } = req.body;
@@ -1270,17 +1215,14 @@ app.post("/api/welcome/:guildId/member-goals", verifyDiscordToken, (req, res) =>
             console.log('Creating new welcome_data.json file');
         }
         
-        // Ensure guild settings exist
         if (!welcomeData[guildId]) {
             welcomeData[guildId] = {};
         }
         
-        // Update only member goals fields
         welcomeData[guildId].member_count_channel_id = member_count_channel_id || null;
         welcomeData[guildId].member_goal_channel_id = member_goal_channel_id || null;
         welcomeData[guildId].member_goal = member_goal || 0;
         
-        // Save to file
         fs.writeFileSync(welcomeFilePath, JSON.stringify(welcomeData, null, 4));
         console.log(`✅ Member goals settings saved to file for guild ${guildId}`);
     } catch (err) {
@@ -1293,29 +1235,25 @@ app.post("/api/welcome/:guildId/member-goals", verifyDiscordToken, (req, res) =>
     });
 });
 
-// ========== STATUS TRACKING ENDPOINTS ==========
+// =======================
+// STATUS TRACKING ENDPOINTS
+// =======================
 
-// Endpoint for bot to GET status data
 app.get("/api/status-data", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
     
-    // Verify authorization
     if (authHeader !== `Bearer ${SECRET_KEY}`) {
         return res.status(401).json({ error: "Unauthorized" });
     }
 
     try {
-        // Read status_data.json from backend
         let statusData = {};
         const statusFilePath = path.join(__dirname, 'status_data.json');
         
         if (fs.existsSync(statusFilePath)) {
             const fileContent = fs.readFileSync(statusFilePath, 'utf8');
             const parsed = JSON.parse(fileContent);
-            // The file has a 'settings' key, but we need to convert it to the format the bot expects
-            // Bot expects: { guildId: { userId: { config } } }
-            // Backend stores: { settings: { guildId: { config } } }
             if (parsed.settings) {
                 for (const [guildId, settings] of Object.entries(parsed.settings)) {
                     if (settings.user_id) {
@@ -1364,7 +1302,6 @@ app.get("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
             message_id: null
         };
 
-        // Return snake_case directly for bot
         let settings = defaultSettings;
         if (statusData.settings && statusData.settings[guildId]) {
             settings = statusData.settings[guildId];
@@ -1389,7 +1326,6 @@ app.get("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
 app.post("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
-    // Map camelCase from frontend to snake_case for bot
     const { enabled, userToTrack, trackingChannel, delay, automatic, useEmbed, offlineMessage } = req.body;
 
     if (!guildId) {
@@ -1397,7 +1333,6 @@ app.post("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
     }
 
     try {
-        // Try to read existing status_data.json
         let statusData = { settings: {} };
         const statusFilePath = path.join(__dirname, 'status_data.json');
         
@@ -1410,7 +1345,6 @@ app.post("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
             console.log('Creating new status_data.json file');
         }
 
-        // Get the OLD settings BEFORE updating (to get the message_id)
         const oldSettings = statusData.settings[guildId] || {};
         const oldMessageId = oldSettings.message_id;
         const oldChannelId = oldSettings.channel_id;
@@ -1419,7 +1353,6 @@ app.post("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
         if (oldMessageId && oldMessageId !== "" && oldMessageId !== "undefined" && oldChannelId && oldChannelId !== "" && oldChannelId !== "undefined") {
             if (oldChannelId !== trackingChannel) {
                 try {
-                    // Load pending posts file with proper structure
                     let pendingPosts = { posts: [] };
                     const pendingPath = path.join(__dirname, 'pending_posts.json');
                     
@@ -1438,12 +1371,10 @@ app.post("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
                         pendingPosts = { posts: [] };
                     }
                     
-                    // Ensure posts array exists
                     if (!pendingPosts.posts) {
                         pendingPosts.posts = [];
                     }
                     
-                    // Add delete action
                     const deleteAction = {
                         action: "delete",
                         guildId: guildId,
@@ -1458,7 +1389,6 @@ app.post("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
             }
         }
         
-        // Now update the settings with proper snake_case keys for the bot
         statusData.settings[guildId] = {
             enabled: enabled === true,
             user_id: userToTrack || "",
@@ -1471,7 +1401,6 @@ app.post("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
             created_at: oldSettings.created_at || new Date().toISOString()
         };
         
-        // Save updated settings
         fs.writeFileSync(statusFilePath, JSON.stringify(statusData, null, 4));
         console.log(`✅ Status settings saved to status_data.json for guild ${guildId}:`, statusData.settings[guildId]);
 
@@ -1486,13 +1415,11 @@ app.post("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
     }
 });
 
-// Store message ID for later deletion
 app.post("/api/status/:guildId/message-id", (req, res) => {
     const { guildId } = req.params;
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
     
-    // Verify authorization
     if (authHeader !== `Bearer ${SECRET_KEY}`) {
         return res.status(401).json({ error: "Unauthorized" });
     }
@@ -1504,7 +1431,6 @@ app.post("/api/status/:guildId/message-id", (req, res) => {
     }
 
     try {
-        // Read existing status_data.json
         let statusData = { settings: {} };
         const statusFilePath = path.join(__dirname, 'status_data.json');
         
@@ -1517,12 +1443,10 @@ app.post("/api/status/:guildId/message-id", (req, res) => {
             console.log('Creating new status_data.json file');
         }
 
-        // Get the OLD message ID BEFORE storing the new one (if it exists and is different)
         const oldSettings = statusData.settings[guildId] || {};
         const oldMessageId = oldSettings.message_id;
         const oldChannelId = oldSettings.channel_id;
 
-        // Update the message ID for this guild
         if (statusData.settings[guildId]) {
             statusData.settings[guildId].message_id = messageId;
             statusData.settings[guildId].last_message_timestamp = new Date().toISOString();
@@ -1530,7 +1454,6 @@ app.post("/api/status/:guildId/message-id", (req, res) => {
             console.warn(`⚠️ Guild ${guildId} settings not found when storing message ID`);
         }
 
-        // Save to file
         fs.writeFileSync(statusFilePath, JSON.stringify(statusData, null, 4));
 
 
@@ -1548,7 +1471,6 @@ app.get("/api/status/pending-posts", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
     
-    // Verify authorization
     if (authHeader !== `Bearer ${SECRET_KEY}`) {
         return res.status(401).json({ error: "Unauthorized" });
     }
@@ -1577,7 +1499,6 @@ app.post("/api/status/pending-posts/remove/:index", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
     
-    // Verify authorization
     if (authHeader !== `Bearer ${SECRET_KEY}`) {
         return res.status(401).json({ error: "Unauthorized" });
     }
@@ -1592,7 +1513,6 @@ app.post("/api/status/pending-posts/remove/:index", (req, res) => {
             if (fs.existsSync(pendingPostsPath)) {
                 const fileContent = fs.readFileSync(pendingPostsPath, 'utf8');
                 const parsed = JSON.parse(fileContent);
-                // Handle both array format and object format
                 if (Array.isArray(parsed)) {
                     pendingPosts = { posts: parsed };
                 } else if (parsed && typeof parsed === 'object' && parsed.posts) {
@@ -1603,7 +1523,6 @@ app.post("/api/status/pending-posts/remove/:index", (req, res) => {
             console.log('No pending posts file');
         }
 
-        // Remove the post at the given index
         if (index >= 0 && index < pendingPosts.posts.length) {
             pendingPosts.posts.splice(parseInt(index), 1);
             fs.writeFileSync(pendingPostsPath, JSON.stringify(pendingPosts, null, 4));
@@ -1622,7 +1541,6 @@ app.post("/api/status/:guildId/post", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
     
-    // Verify authorization
     if (authHeader !== `Bearer ${SECRET_KEY}`) {
         return res.status(401).json({ error: "Unauthorized" });
     }
@@ -1634,7 +1552,6 @@ app.post("/api/status/:guildId/post", (req, res) => {
     }
 
     try {
-        // Load pending posts file
         let pendingPosts = { posts: [] };
         const pendingPostsPath = path.join(__dirname, 'pending_posts.json');
         
@@ -1642,7 +1559,6 @@ app.post("/api/status/:guildId/post", (req, res) => {
             if (fs.existsSync(pendingPostsPath)) {
                 const fileContent = fs.readFileSync(pendingPostsPath, 'utf8');
                 const parsed = JSON.parse(fileContent);
-                // Handle both array format (from delete queueing) and object format (from this endpoint)
                 if (Array.isArray(parsed)) {
                     pendingPosts = { posts: parsed };
                 } else if (parsed && typeof parsed === 'object' && parsed.posts) {
@@ -1656,7 +1572,6 @@ app.post("/api/status/:guildId/post", (req, res) => {
             pendingPosts = { posts: [] };
         }
 
-        // Add new post request to posts array
         if (!pendingPosts.posts) {
             pendingPosts.posts = [];
         }
@@ -1669,7 +1584,6 @@ app.post("/api/status/:guildId/post", (req, res) => {
             timestamp: new Date().toISOString()
         });
 
-        // Save to file
         fs.writeFileSync(pendingPostsPath, JSON.stringify(pendingPosts, null, 4));
 
 
@@ -1683,141 +1597,10 @@ app.post("/api/status/:guildId/post", (req, res) => {
     }
 });
 
-// ============ PREMIUM/TRIALS & NOTIFICATIONS SYSTEM ============
+// =======================
+// TRIALS & GIFTS ENDPOINTS
+// =======================
 
-// Helper function to load/save premium data from bot
-function loadPremiumData() {
-    try {
-        const premiumDataPath = path.join(__dirname, 'premium_data.json');
-        if (fs.existsSync(premiumDataPath)) {
-            return JSON.parse(fs.readFileSync(premiumDataPath, 'utf8'));
-        }
-    } catch (err) {
-        console.log('Premium data file not found, using cache');
-    }
-    return premiumCache;
-}
-
-function savePremiumData(data) {
-    try {
-        const premiumDataPath = path.join(__dirname, 'premium_data.json');
-        fs.writeFileSync(premiumDataPath, JSON.stringify(data, null, 4));
-        // Also update cache
-        Object.keys(data).forEach(key => {
-            premiumCache[key] = data[key];
-        });
-    } catch (err) {
-        console.error('Error saving premium data:', err);
-    }
-}
-
-// Helper function to load/save notifications
-let notificationsData = {};
-
-function loadNotifications() {
-    try {
-        const notificationsPath = path.join(__dirname, 'notifications.json');
-        if (fs.existsSync(notificationsPath)) {
-            notificationsData = JSON.parse(fs.readFileSync(notificationsPath, 'utf8'));
-        }
-    } catch (err) {
-        console.log('Notifications file not found, starting fresh');
-        notificationsData = {};
-    }
-}
-
-function saveNotifications() {
-    try {
-        const notificationsPath = path.join(__dirname, 'notifications.json');
-        fs.writeFileSync(notificationsPath, JSON.stringify(notificationsData, null, 4));
-    } catch (err) {
-        console.error('Error saving notifications:', err);
-    }
-}
-
-// User notification preferences storage
-let userNotificationPreferences = {};
-
-function loadUserPreferences() {
-    try {
-        const prefsPath = path.join(__dirname, 'notification_preferences.json');
-        if (fs.existsSync(prefsPath)) {
-            userNotificationPreferences = JSON.parse(fs.readFileSync(prefsPath, 'utf8'));
-        }
-    } catch (err) {
-        console.log('User preferences file not found, starting fresh');
-        userNotificationPreferences = {};
-    }
-}
-
-function saveUserPreferences() {
-    try {
-        const prefsPath = path.join(__dirname, 'notification_preferences.json');
-        fs.writeFileSync(prefsPath, JSON.stringify(userNotificationPreferences, null, 4));
-    } catch (err) {
-        console.error('Error saving user preferences:', err);
-    }
-}
-
-// Load notifications and preferences on startup
-loadNotifications();
-loadUserPreferences();
-
-// Endpoint for bot to POST premium data (for syncing)
-app.post("/api/premium/sync", (req, res) => {
-    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
-    const authHeader = req.headers['authorization'] || '';
-    
-    if (authHeader !== `Bearer ${SECRET_KEY}`) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    try {
-        const { premiumData } = req.body;
-        if (premiumData && typeof premiumData === 'object') {
-            savePremiumData(premiumData);
-            res.json({ success: true, message: "Premium data synced" });
-        } else {
-            res.status(400).json({ error: "Invalid premium data" });
-        }
-    } catch (err) {
-        console.error('Error syncing premium data:', err);
-        res.status(500).json({ error: "Failed to sync premium data" });
-    }
-});
-
-// Storage for global/broadcast gifts and notifications
-let globalGifts = [];
-let globalNotifications = [];
-
-function loadGlobalData() {
-    try {
-        const globalPath = path.join(__dirname, 'global_data.json');
-        if (fs.existsSync(globalPath)) {
-            const data = JSON.parse(fs.readFileSync(globalPath, 'utf8'));
-            globalGifts = data.gifts || [];
-            globalNotifications = data.notifications || [];
-        }
-    } catch (err) {
-        console.log('Global data file not found, starting fresh');
-    }
-}
-
-function saveGlobalData() {
-    try {
-        const globalPath = path.join(__dirname, 'global_data.json');
-        fs.writeFileSync(globalPath, JSON.stringify({
-            gifts: globalGifts,
-            notifications: globalNotifications
-        }, null, 4));
-    } catch (err) {
-        console.error('Error saving global data:', err);
-    }
-}
-
-loadGlobalData();
-
-// Send a trial to a user
 app.post("/api/trials/send", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -1859,10 +1642,8 @@ app.post("/api/trials/send", (req, res) => {
         let skipped = 0;
 
         const sendTrialToUser = (targetUserId) => {
-            // Check user preferences - default to true if not set
             const userPrefs = userNotificationPreferences[String(targetUserId)] || { trials: true };
             
-            // Only send if user has trials enabled
             if (userPrefs.trials !== false) {
                 if (!notificationsData[String(targetUserId)]) {
                     notificationsData[String(targetUserId)] = { notifications: [], gifts: [] };
@@ -1872,7 +1653,6 @@ app.post("/api/trials/send", (req, res) => {
                     userId: String(targetUserId)
                 });
                 
-                // Immediately activate premium for the user
                 const userIdStr = String(targetUserId);
                 if (!premiumCache[userIdStr]) {
                     premiumCache[userIdStr] = {
@@ -1891,7 +1671,6 @@ app.post("/api/trials/send", (req, res) => {
         };
 
         if (sendToAll || (targetUsers && targetUsers.length === 0)) {
-            // Send individual copies to all known users who have trials enabled
             const allUserIds = Object.keys(knownUsers);
             if (allUserIds.length === 0) {
                 return res.status(400).json({ error: "No users have logged in yet. Send to specific user IDs instead." });
@@ -1902,13 +1681,11 @@ app.post("/api/trials/send", (req, res) => {
             });
             saveNotifications();
         } else if (targetUsers && Array.isArray(targetUsers) && targetUsers.length > 0) {
-            // Store for specific users
             targetUsers.forEach(targetUserId => {
                 sendTrialToUser(targetUserId);
             });
             saveNotifications();
         } else {
-            // Single user
             sendTrialToUser(userId);
             saveNotifications();
         }
@@ -1928,8 +1705,6 @@ app.post("/api/trials/send", (req, res) => {
     }
 });
 
-// Claim a trial (redeem gift)
-// Storage for pending premium claims (bot will fetch and process these)
 let pendingPremiumClaims = {};
 
 function loadPendingClaims() {
@@ -1970,7 +1745,6 @@ app.post("/api/trials/claim", (req, res) => {
             return res.status(400).json({ error: "userId and trialId are required" });
         }
 
-        // Check user-specific gifts first
         let trial = null;
         let isGlobal = false;
 
@@ -1979,7 +1753,6 @@ app.post("/api/trials/claim", (req, res) => {
             trial = userNotifications.gifts.find(g => g.id === trialId);
         }
 
-        // If not found in user gifts, check global gifts
         if (!trial) {
             trial = globalGifts.find(g => g.id === trialId);
             isGlobal = !!trial;
@@ -1993,11 +1766,9 @@ app.post("/api/trials/claim", (req, res) => {
             return res.status(400).json({ error: "Trial already claimed" });
         }
 
-        // Mark as claimed
         trial.claimed = true;
         trial.claimedAt = Date.now();
 
-        // Create a pending claim for the bot to process
         const claimId = `claim_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const expiryTime = Math.floor(Date.now() / 1000) + (trial.durationDays * 24 * 60 * 60);
 
@@ -2011,7 +1782,6 @@ app.post("/api/trials/claim", (req, res) => {
             processedAt: null
         };
 
-        // Save changes
         if (isGlobal) {
             saveGlobalData();
         } else {
@@ -2035,7 +1805,6 @@ app.post("/api/trials/claim", (req, res) => {
     }
 });
 
-// Endpoint for bot to fetch pending premium claims
 app.get("/api/premium/pending-claims", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -2053,7 +1822,6 @@ app.get("/api/premium/pending-claims", (req, res) => {
     }
 });
 
-// Endpoint for bot to mark claim as processed
 app.post("/api/premium/claim-processed", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -2081,7 +1849,6 @@ app.post("/api/premium/claim-processed", (req, res) => {
     }
 });
 
-// Get user's gifts (trials)
 app.get("/api/user/:userId/gifts", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -2093,18 +1860,14 @@ app.get("/api/user/:userId/gifts", (req, res) => {
     try {
         const { userId } = req.params;
         
-        // Track this user as known
         trackUser(userId);
         
         const now = Date.now();
 
-        // Get user-specific gifts only
         let gifts = [];
         const userNotifications = notificationsData[String(userId)];
         if (userNotifications && userNotifications.gifts) {
             gifts = userNotifications.gifts.filter(gift => {
-                // Check if gift hasn't expired and hasn't been claimed
-                // Use dashboardExpiresAt for dashboard expiration
                 const expiryTime = gift.dashboardExpiresAt || gift.expiresAt;
                 return expiryTime > now && !gift.claimed;
             });
@@ -2117,7 +1880,6 @@ app.get("/api/user/:userId/gifts", (req, res) => {
     }
 });
 
-// Claim a gift
 app.post("/api/gifts/claim", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -2133,7 +1895,6 @@ app.post("/api/gifts/claim", (req, res) => {
             return res.status(400).json({ error: "userId and giftId are required" });
         }
         
-        // Find and mark the gift as claimed
         const userNotifications = notificationsData[String(userId)];
         if (userNotifications && userNotifications.gifts) {
             const gift = userNotifications.gifts.find(g => g.id === giftId);
@@ -2141,7 +1902,6 @@ app.post("/api/gifts/claim", (req, res) => {
                 gift.claimed = true;
                 gift.claimedAt = Date.now();
                 
-                // Create a pending claim for the bot to process
                 const claimId = `claim_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
                 const expiryTime = Math.floor(Date.now() / 1000) + (gift.premiumTrialDurationDays * 24 * 60 * 60);
 
@@ -2176,7 +1936,10 @@ app.post("/api/gifts/claim", (req, res) => {
     }
 });
 
-// Send a notification to users
+// =======================
+// NOTIFICATIONS ENDPOINTS
+// =======================
+
 app.post("/api/notifications/send", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -2212,7 +1975,6 @@ app.post("/api/notifications/send", (req, res) => {
         const typeKey = type.toLowerCase();
 
         const sendNotificationToUser = (userId) => {
-            // Check user preferences - default to true if not set
             const userPrefs = userNotificationPreferences[String(userId)] || { 
                 updates: true, 
                 gifts: true, 
@@ -2220,7 +1982,6 @@ app.post("/api/notifications/send", (req, res) => {
                 community: true 
             };
             
-            // Only send if user has this notification type enabled
             if (userPrefs[typeKey] !== false) {
                 if (!notificationsData[String(userId)]) {
                     notificationsData[String(userId)] = { notifications: [], gifts: [] };
@@ -2233,14 +1994,12 @@ app.post("/api/notifications/send", (req, res) => {
         };
 
         if (sendToAll || (targetUsers && targetUsers.length === 0)) {
-            // Store as global broadcast to all users (check preferences per user)
             const allUserIds = Object.keys(knownUsers);
             allUserIds.forEach(userId => {
                 sendNotificationToUser(userId);
             });
             saveNotifications();
         } else if (targetUsers && Array.isArray(targetUsers) && targetUsers.length > 0) {
-            // Send to specific users (check preferences)
             targetUsers.forEach(userId => {
                 sendNotificationToUser(userId);
             });
@@ -2262,7 +2021,6 @@ app.post("/api/notifications/send", (req, res) => {
     }
 });
 
-// Save user's notification preferences
 app.post("/api/user/:userId/notifications", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -2275,10 +2033,8 @@ app.post("/api/user/:userId/notifications", (req, res) => {
         const { userId } = req.params;
         const { updates, gifts, trials, community } = req.body;
         
-        // Track this user as known
         trackUser(userId);
         
-        // Save preferences with defaults
         userNotificationPreferences[String(userId)] = {
             updates: updates !== false,
             gifts: gifts !== false,
@@ -2299,7 +2055,6 @@ app.post("/api/user/:userId/notifications", (req, res) => {
     }
 });
 
-// Get user's notifications
 app.get("/api/user/:userId/notifications", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -2311,13 +2066,11 @@ app.get("/api/user/:userId/notifications", (req, res) => {
     try {
         const { userId } = req.params;
         
-        // Track this user as known
         trackUser(userId);
         
         const now = Date.now();
         const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
-        // Get user-specific notifications (including read ones, valid for 7 days)
         let notifications = [];
         const userNotifications = notificationsData[userId];
         if (userNotifications && userNotifications.notifications) {
@@ -2327,7 +2080,6 @@ app.get("/api/user/:userId/notifications", (req, res) => {
             });
         }
 
-        // Add global broadcast notifications (valid for 7 days)
         const activeGlobalNotifications = globalNotifications.filter(n => {
             const createdAt = n.createdAt || n.expiresAt - (n.durationDays * 24 * 60 * 60 * 1000);
             return (now - createdAt) < SEVEN_DAYS_MS; // Show for 7 days
@@ -2341,7 +2093,6 @@ app.get("/api/user/:userId/notifications", (req, res) => {
     }
 });
 
-// Mark all user notifications as read
 app.post("/api/user/:userId/notifications/read", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -2353,14 +2104,12 @@ app.post("/api/user/:userId/notifications/read", (req, res) => {
     try {
         const { userId } = req.params;
         
-        // Mark all user-specific notifications as read
         if (notificationsData[String(userId)] && notificationsData[String(userId)].notifications) {
             notificationsData[String(userId)].notifications.forEach(n => {
                 n.read = true;
             });
         }
         
-        // Mark all global notifications as read for this user
         globalNotifications.forEach(n => {
             if (!n.readBy) n.readBy = [];
             n.readBy.push(String(userId));
@@ -2375,7 +2124,6 @@ app.post("/api/user/:userId/notifications/read", (req, res) => {
     }
 });
 
-// Mark notification as read
 app.post("/api/notifications/:notificationId/read", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -2412,7 +2160,119 @@ app.post("/api/notifications/:notificationId/read", (req, res) => {
     }
 });
 
-// Endpoint for getting user's premium credits
+// =======================
+// DATA MANAGEMENT FUNCTIONS
+// =======================
+
+function loadPremiumData() {
+    try {
+        const premiumDataPath = path.join(__dirname, 'premium_data.json');
+        if (fs.existsSync(premiumDataPath)) {
+            return JSON.parse(fs.readFileSync(premiumDataPath, 'utf8'));
+        }
+    } catch (err) {
+        console.log('Premium data file not found, using cache');
+    }
+    return premiumCache;
+}
+
+function savePremiumData(data) {
+    try {
+        const premiumDataPath = path.join(__dirname, 'premium_data.json');
+        fs.writeFileSync(premiumDataPath, JSON.stringify(data, null, 4));
+        Object.keys(data).forEach(key => {
+            premiumCache[key] = data[key];
+        });
+    } catch (err) {
+        console.error('Error saving premium data:', err);
+    }
+}
+
+let notificationsData = {};
+
+function loadNotifications() {
+    try {
+        const notificationsPath = path.join(__dirname, 'notifications.json');
+        if (fs.existsSync(notificationsPath)) {
+            notificationsData = JSON.parse(fs.readFileSync(notificationsPath, 'utf8'));
+        }
+    } catch (err) {
+        console.log('Notifications file not found, starting fresh');
+        notificationsData = {};
+    }
+}
+
+function saveNotifications() {
+    try {
+        const notificationsPath = path.join(__dirname, 'notifications.json');
+        fs.writeFileSync(notificationsPath, JSON.stringify(notificationsData, null, 4));
+    } catch (err) {
+        console.error('Error saving notifications:', err);
+    }
+}
+
+let userNotificationPreferences = {};
+
+function loadUserPreferences() {
+    try {
+        const prefsPath = path.join(__dirname, 'notification_preferences.json');
+        if (fs.existsSync(prefsPath)) {
+            userNotificationPreferences = JSON.parse(fs.readFileSync(prefsPath, 'utf8'));
+        }
+    } catch (err) {
+        console.log('User preferences file not found, starting fresh');
+        userNotificationPreferences = {};
+    }
+}
+
+function saveUserPreferences() {
+    try {
+        const prefsPath = path.join(__dirname, 'notification_preferences.json');
+        fs.writeFileSync(prefsPath, JSON.stringify(userNotificationPreferences, null, 4));
+    } catch (err) {
+        console.error('Error saving user preferences:', err);
+    }
+}
+
+loadNotifications();
+loadUserPreferences();
+
+let globalGifts = [];
+let globalNotifications = [];
+
+function loadGlobalData() {
+    try {
+        const globalPath = path.join(__dirname, 'global_data.json');
+        if (fs.existsSync(globalPath)) {
+            const data = JSON.parse(fs.readFileSync(globalPath, 'utf8'));
+            globalGifts = data.gifts || [];
+            globalNotifications = data.notifications || [];
+        }
+    } catch (err) {
+        console.log('Global data file not found, starting fresh');
+    }
+}
+
+function saveGlobalData() {
+    try {
+        const globalPath = path.join(__dirname, 'global_data.json');
+        fs.writeFileSync(globalPath, JSON.stringify({
+            gifts: globalGifts,
+            notifications: globalNotifications
+        }, null, 4));
+    } catch (err) {
+        console.error('Error saving global data:', err);
+    }
+}
+
+loadGlobalData();
+
+loadPendingClaims();
+
+// =======================
+// USER CREDITS ENDPOINTS
+// =======================
+
 app.get("/api/premium-credits/:userId", (req, res) => {
     const authHeader = req.headers['authorization'] || '';
     const token = authHeader.replace('Bearer ', '');
@@ -2422,12 +2282,14 @@ app.get("/api/premium-credits/:userId", (req, res) => {
         return res.status(400).json({ error: "User ID required" });
     }
 
-    // Premium credits stored in memory (would be in a database in production)
-    // This is a placeholder - in production, sync from bot's premium_credits.json
     const userCredits = premiumCredits[userId] || 0;
     
     res.json({ userId, credits: userCredits });
 });
+
+// =======================
+// SERVER STARTUP
+// =======================
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
