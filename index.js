@@ -967,7 +967,11 @@ app.get("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
             enabled: false,
             per_message: 5,
             currency_symbol: "💰",
-            start: 500
+            start: 500,
+            balance_multiplier: 1.0,
+            daily_interest_rate: 0,
+            robbery_chance: 50,
+            work_reward_multiplier: 1.0
         };
 
         let settings = defaultSettings;
@@ -982,7 +986,11 @@ app.get("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
             enabled: false,
             per_message: 5,
             currency_symbol: "💰",
-            start: 500
+            start: 500,
+            balance_multiplier: 1.0,
+            daily_interest_rate: 0,
+            robbery_chance: 50,
+            work_reward_multiplier: 1.0
         });
     }
 });
@@ -990,7 +998,7 @@ app.get("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
 app.post("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
-    const { enabled, currencyPerMessage, currencySymbol, startingAmount } = req.body;
+    const { enabled, currencyPerMessage, currencySymbol, startingAmount, balanceMultiplier, dailyInterestRate, robberyChance, workRewardMultiplier } = req.body;
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
@@ -1005,6 +1013,10 @@ app.post("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
         per_message: currencyPerMessage || 10,
         currency_symbol: currencySymbol || "💰",
         start: startingAmount || 500,
+        balance_multiplier: balanceMultiplier || 1.0,
+        daily_interest_rate: dailyInterestRate || 0,
+        robbery_chance: robberyChance || 50,
+        work_reward_multiplier: workRewardMultiplier || 1.0,
         lastUpdated: new Date().toISOString()
     };
 
@@ -1025,7 +1037,11 @@ app.post("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
             enabled: enabled || false,
             per_message: currencyPerMessage || 10,
             currency_symbol: currencySymbol || "💰",
-            start: startingAmount || 500
+            start: startingAmount || 500,
+            balance_multiplier: balanceMultiplier || 1.0,
+            daily_interest_rate: dailyInterestRate || 0,
+            robbery_chance: robberyChance || 50,
+            work_reward_multiplier: workRewardMultiplier || 1.0
         };
         
         fs.writeFileSync(economyFilePath, JSON.stringify(economyData, null, 4));
