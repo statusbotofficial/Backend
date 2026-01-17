@@ -653,6 +653,43 @@ app.post("/api/premium/grant-processed", (req, res) => {
     }
 });
 
+app.post("/api/premium/remove", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const { userId } = req.body;
+
+        if (!userId) {
+            return res.status(400).json({ error: "userId is required" });
+        }
+
+        const userIdStr = String(userId);
+
+        if (premiumCache[userIdStr]) {
+            premiumCache[userIdStr].active = false;
+            premiumCache[userIdStr].expiresAt = null;
+            premiumCache[userIdStr].reason = null;
+            premiumCache[userIdStr].source = null;
+            premiumCache[userIdStr].duration_days = null;
+        }
+
+        console.log(`✓ Premium removed from user ${userId}`);
+
+        res.json({ 
+            success: true, 
+            message: `Premium removed from user ${userId}`
+        });
+    } catch (err) {
+        console.error('Error removing premium:', err);
+        res.status(500).json({ error: "Failed to remove premium", details: err.message });
+    }
+});
+
 app.get("/api/channels/:guildId", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
