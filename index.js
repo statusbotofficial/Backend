@@ -16,7 +16,7 @@ if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// Bot stats storage
+// Bot stats storage 
 let botStats = {
     servers: 0,
     ping: 0,
