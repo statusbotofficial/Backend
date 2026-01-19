@@ -2339,9 +2339,97 @@ app.get("/api/premium-credits/:userId", (req, res) => {
         return res.status(400).json({ error: "User ID required" });
     }
 
-    const userCredits = premiumCredits[userId] || 0;
+    const userCredits = premiumCache[userId] || 0;
     
     res.json({ userId, credits: userCredits });
+});
+
+// =======================
+// LOGS ENDPOINTS
+// =======================
+
+let allLogs = [];
+const MAX_LOGS = 5000;
+
+app.post("/api/logs/add", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const { event_type, description, user_id, guild_id, details } = req.body;
+        
+        const logEntry = {
+            timestamp: new Date().toISOString(),
+            event_type,
+            description,
+            user_id,
+            guild_id,
+            details: details || {}
+        };
+        
+        allLogs.push(logEntry);
+        
+        // Keep only last MAX_LOGS entries
+        if (allLogs.length > MAX_LOGS) {
+            allLogs = allLogs.slice(-MAX_LOGS);
+        }
+        
+        res.json({ success: true, message: "Log saved" });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to save log", details: err.message });
+    }
+});
+
+app.get("/api/logs/:guildId", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { guildId } = req.params;
+    const limit = req.query.limit || 100;
+
+    try {
+        const guildLogs = allLogs
+            .filter(log => log.guild_id === guildId)
+            .slice(-limit);
+        
+        res.json({
+            guildId,
+            count: guildLogs.length,
+            logs: guildLogs
+        });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to fetch logs", details: err.message });
+    }
+});
+
+app.get("/api/logs", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const limit = req.query.limit || 100;
+
+    try {
+        const paginatedLogs = allLogs.slice(-limit);
+        
+        res.json({
+            count: paginatedLogs.length,
+            logs: paginatedLogs
+        });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to fetch logs", details: err.message });
+    }
 });
 
 // =======================
