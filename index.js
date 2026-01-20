@@ -1,10 +1,10 @@
+
 // =======================
 // IMPORTS & CONFIGURATION
 // =======================
 
 import express from "express";
 import cors from "cors";
-import cookieParser from "cookie-parser";
 import Groq from "groq-sdk";
 import fs from "fs";
 import path from "path";
@@ -172,12 +172,10 @@ app.use(cors({
         "https://status-bot.xyz"
     ],
     methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true
+    allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
 app.use(express.json({ limit: "1mb" }));
-app.use(cookieParser());
 
 const groq = new Groq({
     apiKey: process.env.GROQ_API_KEY
@@ -219,101 +217,6 @@ async function verifyDiscordToken(req, res, next) {
         return res.status(401).json({ error: "Unauthorized" });
     }
 }
-
-// Session store (in production, use Redis or database)
-const sessions = new Map();
-
-function generateSessionId() {
-    return require('crypto').randomBytes(32).toString('hex');
-}
-
-// OAuth endpoints
-app.post("/api/auth/discord", async (req, res) => {
-    try {
-        const { code } = req.body;
-        
-        if (!code) {
-            return res.status(400).json({ error: "Missing authorization code" });
-        }
-
-        // Exchange code for access token
-        const tokenRes = await fetch('https://discord.com/api/v10/oauth2/token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                client_id: process.env.DISCORD_CLIENT_ID,
-                client_secret: process.env.DISCORD_CLIENT_SECRET,
-                code,
-                grant_type: 'authorization_code',
-                redirect_uri: process.env.DISCORD_REDIRECT_URI || 'https://status-bot.xyz/'
-            })
-        });
-
-        if (!tokenRes.ok) {
-            return res.status(401).json({ error: "Failed to exchange code" });
-        }
-
-        const tokenData = await tokenRes.json();
-        const accessToken = tokenData.access_token;
-
-        // Fetch user data
-        const userRes = await fetch('https://discord.com/api/v10/users/@me', {
-            headers: { Authorization: `Bearer ${accessToken}` }
-        });
-
-        if (!userRes.ok) {
-            return res.status(401).json({ error: "Failed to fetch user data" });
-        }
-
-        const userData = await userRes.json();
-        
-        // Create session
-        const sessionId = generateSessionId();
-        sessions.set(sessionId, {
-            userId: userData.id,
-            accessToken: accessToken,
-            userData: userData,
-            createdAt: Date.now()
-        });
-
-        trackUser(userData.id);
-
-        // Set httpOnly cookie
-        res.cookie('sessionId', sessionId, {
-            httpOnly: true,
-            secure: true,
-            sameSite: 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-        });
-
-        res.json(userData);
-    } catch (error) {
-        console.error('OAuth error:', error);
-        res.status(500).json({ error: "Authentication failed" });
-    }
-});
-
-app.get("/api/auth/user", (req, res) => {
-    const sessionId = req.cookies?.sessionId;
-    
-    if (!sessionId || !sessions.has(sessionId)) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    const session = sessions.get(sessionId);
-    res.json(session.userData);
-});
-
-app.post("/api/auth/logout", (req, res) => {
-    const sessionId = req.cookies?.sessionId;
-    
-    if (sessionId) {
-        sessions.delete(sessionId);
-    }
-
-    res.clearCookie('sessionId');
-    res.json({ success: true });
-});
 
 // =======================
 // AI SUPPORT ENDPOINTS
