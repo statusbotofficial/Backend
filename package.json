@@ -9,7 +9,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.19.2",
-    "groq-sdk": "^0.7.0"
+    "groq-sdk": "^0.7.0",
     "cookie-parser": "^1.4.6"
   }
 }
