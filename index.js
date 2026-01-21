@@ -4,7 +4,6 @@
 
 import express from "express";
 import cors from "cors";
-import cookieParser from "cookie-parser";
 import Groq from "groq-sdk";
 import fs from "fs";
 import path from "path";
