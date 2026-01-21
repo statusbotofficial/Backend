@@ -171,7 +171,7 @@ app.use(cors({
         "https://www.status-bot.xyz",
         "https://status-bot.xyz"
     ],
-    methods: ["GET", "POST", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true
 }));
