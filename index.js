@@ -2589,7 +2589,7 @@ app.get('/api/staff/forms/active', (req, res) => {
 });
 
 // Create or update a staff form
-app.post('/api/staff/forms', verifyDiscordToken, (req, res) => {
+app.post('/api/staff/forms', (req, res) => {
     try {
         const { id, title, description, questions, requiresApproval, active } = req.body;
         
@@ -2626,7 +2626,7 @@ app.post('/api/staff/forms', verifyDiscordToken, (req, res) => {
 });
 
 // Delete a staff form
-app.delete('/api/staff/forms/:formId', verifyDiscordToken, (req, res) => {
+app.delete('/api/staff/forms/:formId', (req, res) => {
     try {
         const forms = loadStaffForms();
         const newForms = forms.filter(f => f.id != req.params.formId);
@@ -2686,7 +2686,7 @@ app.get('/api/staff/submissions', (req, res) => {
 });
 
 // Update submission status (approve/reject)
-app.patch('/api/staff/submissions/:submissionId', verifyDiscordToken, (req, res) => {
+app.patch('/api/staff/submissions/:submissionId', (req, res) => {
     try {
         const { status, rejectionReason } = req.body;
         const submissions = loadSubmissions();
