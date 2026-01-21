@@ -2625,6 +2625,43 @@ app.post('/api/staff/forms', (req, res) => {
     }
 });
 
+// Update a staff form (PUT endpoint for CORS preflight)
+app.put('/api/staff/forms', (req, res) => {
+    try {
+        const { id, title, description, questions, requiresApproval, active } = req.body;
+        
+        if (!title || !questions || questions.length === 0) {
+            return res.status(400).json({ error: 'Invalid form data' });
+        }
+
+        const forms = loadStaffForms();
+        const existingIndex = forms.findIndex(f => f.id == id);
+        
+        const formData = {
+            id: id || Date.now(),
+            title,
+            description,
+            questions,
+            requiresApproval: requiresApproval || false,
+            active: active !== false,
+            createdAt: existingIndex >= 0 ? forms[existingIndex].createdAt : new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        };
+
+        if (existingIndex >= 0) {
+            forms[existingIndex] = formData;
+        } else {
+            forms.push(formData);
+        }
+
+        saveStaffForms(forms);
+        res.json(formData);
+    } catch (error) {
+        console.error('Error saving form:', error);
+        res.status(500).json({ error: 'Failed to save form' });
+    }
+});
+
 // Delete a staff form
 app.delete('/api/staff/forms/:formId', (req, res) => {
     try {
