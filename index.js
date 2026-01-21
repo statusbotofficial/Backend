@@ -1,10 +1,10 @@
-
 // =======================
 // IMPORTS & CONFIGURATION
 // =======================
 
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import Groq from "groq-sdk";
 import fs from "fs";
 import path from "path";
@@ -172,10 +172,12 @@ app.use(cors({
         "https://status-bot.xyz"
     ],
     methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"]
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true
 }));
 
 app.use(express.json({ limit: "1mb" }));
+app.use(cookieParser());
 
 const groq = new Groq({
     apiKey: process.env.GROQ_API_KEY
@@ -217,6 +219,101 @@ async function verifyDiscordToken(req, res, next) {
         return res.status(401).json({ error: "Unauthorized" });
     }
 }
+
+// Session store (in production, use Redis or database)
+const sessions = new Map();
+
+function generateSessionId() {
+    return require('crypto').randomBytes(32).toString('hex');
+}
+
+// OAuth endpoints
+app.post("/api/auth/discord", async (req, res) => {
+    try {
+        const { code } = req.body;
+        
+        if (!code) {
+            return res.status(400).json({ error: "Missing authorization code" });
+        }
+
+        // Exchange code for access token
+        const tokenRes = await fetch('https://discord.com/api/v10/oauth2/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                client_id: process.env.DISCORD_CLIENT_ID,
+                client_secret: process.env.DISCORD_CLIENT_SECRET,
+                code,
+                grant_type: 'authorization_code',
+                redirect_uri: process.env.DISCORD_REDIRECT_URI || 'https://status-bot.xyz/'
+            })
+        });
+
+        if (!tokenRes.ok) {
+            return res.status(401).json({ error: "Failed to exchange code" });
+        }
+
+        const tokenData = await tokenRes.json();
+        const accessToken = tokenData.access_token;
+
+        // Fetch user data
+        const userRes = await fetch('https://discord.com/api/v10/users/@me', {
+            headers: { Authorization: `Bearer ${accessToken}` }
+        });
+
+        if (!userRes.ok) {
+            return res.status(401).json({ error: "Failed to fetch user data" });
+        }
+
+        const userData = await userRes.json();
+        
+        // Create session
+        const sessionId = generateSessionId();
+        sessions.set(sessionId, {
+            userId: userData.id,
+            accessToken: accessToken,
+            userData: userData,
+            createdAt: Date.now()
+        });
+
+        trackUser(userData.id);
+
+        // Set httpOnly cookie
+        res.cookie('sessionId', sessionId, {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
+
+        res.json(userData);
+    } catch (error) {
+        console.error('OAuth error:', error);
+        res.status(500).json({ error: "Authentication failed" });
+    }
+});
+
+app.get("/api/auth/user", (req, res) => {
+    const sessionId = req.cookies?.sessionId;
+    
+    if (!sessionId || !sessions.has(sessionId)) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const session = sessions.get(sessionId);
+    res.json(session.userData);
+});
+
+app.post("/api/auth/logout", (req, res) => {
+    const sessionId = req.cookies?.sessionId;
+    
+    if (sessionId) {
+        sessions.delete(sessionId);
+    }
+
+    res.clearCookie('sessionId');
+    res.json({ success: true });
+});
 
 // =======================
 // AI SUPPORT ENDPOINTS
@@ -2430,6 +2527,186 @@ app.get("/api/logs", (req, res) => {
         });
     } catch (err) {
         res.status(500).json({ error: "Failed to fetch logs", details: err.message });
+    }
+});
+
+// =======================
+// STAFF APPLICATIONS
+// =======================
+
+const FORMS_FILE = path.join(__dirname, 'data', 'staff_forms.json');
+const SUBMISSIONS_FILE = path.join(__dirname, 'data', 'staff_submissions.json');
+
+function loadStaffForms() {
+    try {
+        if (fs.existsSync(FORMS_FILE)) {
+            return JSON.parse(fs.readFileSync(FORMS_FILE, 'utf8'));
+        }
+    } catch (err) {
+        console.error('Error loading staff forms:', err);
+    }
+    return [];
+}
+
+function saveStaffForms(forms) {
+    try {
+        fs.writeFileSync(FORMS_FILE, JSON.stringify(forms, null, 2));
+    } catch (err) {
+        console.error('Error saving staff forms:', err);
+    }
+}
+
+function loadSubmissions() {
+    try {
+        if (fs.existsSync(SUBMISSIONS_FILE)) {
+            return JSON.parse(fs.readFileSync(SUBMISSIONS_FILE, 'utf8'));
+        }
+    } catch (err) {
+        console.error('Error loading submissions:', err);
+    }
+    return [];
+}
+
+function saveSubmissions(submissions) {
+    try {
+        fs.writeFileSync(SUBMISSIONS_FILE, JSON.stringify(submissions, null, 2));
+    } catch (err) {
+        console.error('Error saving submissions:', err);
+    }
+}
+
+// Get all staff forms
+app.get('/api/staff/forms', (req, res) => {
+    const forms = loadStaffForms();
+    res.json(forms);
+});
+
+// Get active staff forms (for applicants)
+app.get('/api/staff/forms/active', (req, res) => {
+    const forms = loadStaffForms();
+    const activeForms = forms.filter(f => f.active !== false);
+    res.json(activeForms);
+});
+
+// Create or update a staff form
+app.post('/api/staff/forms', verifyDiscordToken, (req, res) => {
+    try {
+        const { id, title, description, questions, requiresApproval, active } = req.body;
+        
+        if (!title || !questions || questions.length === 0) {
+            return res.status(400).json({ error: 'Invalid form data' });
+        }
+
+        const forms = loadStaffForms();
+        const existingIndex = forms.findIndex(f => f.id == id);
+        
+        const formData = {
+            id: id || Date.now(),
+            title,
+            description,
+            questions,
+            requiresApproval: requiresApproval || false,
+            active: active !== false,
+            createdAt: existingIndex >= 0 ? forms[existingIndex].createdAt : new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        };
+
+        if (existingIndex >= 0) {
+            forms[existingIndex] = formData;
+        } else {
+            forms.push(formData);
+        }
+
+        saveStaffForms(forms);
+        res.json(formData);
+    } catch (error) {
+        console.error('Error saving form:', error);
+        res.status(500).json({ error: 'Failed to save form' });
+    }
+});
+
+// Delete a staff form
+app.delete('/api/staff/forms/:formId', verifyDiscordToken, (req, res) => {
+    try {
+        const forms = loadStaffForms();
+        const newForms = forms.filter(f => f.id != req.params.formId);
+        
+        if (newForms.length === forms.length) {
+            return res.status(404).json({ error: 'Form not found' });
+        }
+
+        saveStaffForms(newForms);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting form:', error);
+        res.status(500).json({ error: 'Failed to delete form' });
+    }
+});
+
+// Submit a staff application
+app.post('/api/staff/submissions', (req, res) => {
+    try {
+        const { formId, formTitle, responses, status } = req.body;
+
+        if (!formId || !responses) {
+            return res.status(400).json({ error: 'Invalid submission data' });
+        }
+
+        const submissions = loadSubmissions();
+        const submission = {
+            id: Date.now(),
+            formId,
+            formTitle,
+            responses,
+            status: status || 'submitted',
+            timestamp: new Date().toISOString(),
+            reviewedAt: null,
+            rejectionReason: null,
+        };
+
+        submissions.push(submission);
+        saveSubmissions(submissions);
+
+        res.json(submission);
+    } catch (error) {
+        console.error('Error submitting application:', error);
+        res.status(500).json({ error: 'Failed to submit application' });
+    }
+});
+
+// Get all submissions (for staff review)
+app.get('/api/staff/submissions', verifyDiscordToken, (req, res) => {
+    try {
+        const submissions = loadSubmissions();
+        res.json(submissions);
+    } catch (error) {
+        console.error('Error loading submissions:', error);
+        res.status(500).json({ error: 'Failed to load submissions' });
+    }
+});
+
+// Update submission status (approve/reject)
+app.patch('/api/staff/submissions/:submissionId', verifyDiscordToken, (req, res) => {
+    try {
+        const { status, rejectionReason } = req.body;
+        const submissions = loadSubmissions();
+        const submissionIndex = submissions.findIndex(s => s.id == req.params.submissionId);
+
+        if (submissionIndex < 0) {
+            return res.status(404).json({ error: 'Submission not found' });
+        }
+
+        submissions[submissionIndex].status = status;
+        submissions[submissionIndex].reviewedAt = new Date().toISOString();
+        if (rejectionReason) {
+            submissions[submissionIndex].rejectionReason = rejectionReason;
+        }
+
+        saveSubmissions(submissions);
+        res.json(submissions[submissionIndex]);
+    } catch (error) {
+        console.error('Error updating submission:', error);
+        res.status(500).json({ error: 'Failed to update submission' });
     }
 });
 
