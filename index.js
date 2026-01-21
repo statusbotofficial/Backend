@@ -2675,7 +2675,7 @@ app.post('/api/staff/submissions', (req, res) => {
 });
 
 // Get all submissions (for staff review)
-app.get('/api/staff/submissions', verifyDiscordToken, (req, res) => {
+app.get('/api/staff/submissions', (req, res) => {
     try {
         const submissions = loadSubmissions();
         res.json(submissions);
