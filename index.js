@@ -2667,6 +2667,24 @@ app.post('/api/staff/submissions', (req, res) => {
         submissions.push(submission);
         saveSubmissions(submissions);
 
+        // Send webhook notification
+        const webhookUrl = process.env.FORM_SUBMISSION_WEBHOOK;
+        if (webhookUrl) {
+            fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    embeds: [{
+                        title: '📝 New Form Submission',
+                        description: `A new user has submitted the **${formTitle}** form.`,
+                        color: 5170687,
+                        timestamp: new Date().toISOString(),
+                        footer: { text: 'Staff Applications' }
+                    }]
+                })
+            }).catch(err => console.error('Error sending webhook:', err));
+        }
+
         res.json(submission);
     } catch (error) {
         console.error('Error submitting application:', error);
