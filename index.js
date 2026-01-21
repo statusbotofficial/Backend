@@ -176,7 +176,6 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: "1mb" }));
-app.use(cookieParser());
 
 const groq = new Groq({
     apiKey: process.env.GROQ_API_KEY
