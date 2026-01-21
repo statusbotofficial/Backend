@@ -2646,6 +2646,7 @@ app.delete('/api/staff/forms/:formId', (req, res) => {
 // Submit a staff application
 app.post('/api/staff/submissions', (req, res) => {
     try {
+        console.log('📝 POST /api/staff/submissions received', req.body);
         const { formId, formTitle, responses, status } = req.body;
 
         if (!formId || !responses) {
@@ -2669,7 +2670,9 @@ app.post('/api/staff/submissions', (req, res) => {
 
         // Send webhook notification
         const webhookUrl = process.env.FORM_SUBMISSION_WEBHOOK;
+        console.log('Webhook URL configured:', !!webhookUrl);
         if (webhookUrl) {
+            console.log('🔔 Sending webhook to Discord...');
             fetch(webhookUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2682,7 +2685,10 @@ app.post('/api/staff/submissions', (req, res) => {
                         footer: { text: 'Staff Applications' }
                     }]
                 })
-            }).catch(err => console.error('Error sending webhook:', err));
+            }).then(r => console.log('✅ Webhook sent, status:', r.status))
+              .catch(err => console.error('❌ Error sending webhook:', err));
+        } else {
+            console.warn('⚠️ FORM_SUBMISSION_WEBHOOK not configured');
         }
 
         res.json(submission);
