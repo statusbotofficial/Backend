@@ -749,7 +749,7 @@ app.post("/api/premium/grant-processed", (req, res) => {
     }
 });
 
-app.get("/api/channels/:guildId", verifyDiscordToken, (req, res) => {
+app.get("/api/channels/:guildId", (req, res) => {
     const { guildId } = req.params;
 
     const channels = serverChannels[guildId] || [];
