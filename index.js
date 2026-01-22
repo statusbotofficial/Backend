@@ -654,7 +654,7 @@ app.post("/api/premium/grant-processed", (req, res) => {
     }
 });
 
-app.get("/api/channels/:guildId", verifyDiscordToken, (req, res) => {
+app.get("/api/channels/:guildId", (req, res) => {
     const { guildId } = req.params;
 
     const channels = serverChannels[guildId] || [];
@@ -831,7 +831,7 @@ app.get('/api/guild/:guildId/members', async (req, res) => {
 // LEVELING ENDPOINTS
 // =======================
 
-app.get("/api/leveling/:guildId/settings", verifyDiscordToken, (req, res) => {
+app.get("/api/leveling/:guildId/settings", (req, res) => {
     const { guildId } = req.params;
 
     try {
@@ -956,7 +956,7 @@ app.get("/api/leveling/:guildId/leaderboard", (req, res) => {
 // ECONOMY ENDPOINTS
 // =======================
 
-app.get("/api/economy/:guildId/settings", verifyDiscordToken, (req, res) => {
+app.get("/api/economy/:guildId/settings", (req, res) => {
     const { guildId } = req.params;
 
     try {
@@ -1117,7 +1117,7 @@ app.post("/api/economy/:guildId/reset-balances", verifyDiscordToken, (req, res) 
 // WELCOME ENDPOINTS
 // =======================
 
-app.get("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
+app.get("/api/welcome/:guildId/settings", (req, res) => {
     const { guildId } = req.params;
 
     try {
@@ -1333,7 +1333,7 @@ app.get("/api/status-data", (req, res) => {
     }
 });
 
-app.get("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
+app.get("/api/status/:guildId/settings", (req, res) => {
     const { guildId } = req.params;
 
     if (!guildId) {
