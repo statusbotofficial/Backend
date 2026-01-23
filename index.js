@@ -184,8 +184,11 @@ const groq = new Groq({
 app.options("*", cors());
 
 // =======================
-// AUTHENTICATION
+// AUTHENTICATION & TOKEN CACHE
 // =======================
+
+const tokenCache = new Map();
+const TOKEN_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 async function verifyDiscordToken(req, res, next) {
     const authHeader = req.headers['authorization'] || '';
@@ -201,6 +204,18 @@ async function verifyDiscordToken(req, res, next) {
     if (token === process.env.BACKEND_SECRET || token === "status-bot-stats-secret-key") {
         req.user = { isBot: true };
         return next();
+    }
+    
+    // Check token cache first
+    if (tokenCache.has(token)) {
+        const cached = tokenCache.get(token);
+        if (Date.now() - cached.timestamp < TOKEN_CACHE_TTL) {
+            console.log('✅ Token verified from cache for:', cached.user.username);
+            req.user = cached.user;
+            return next();
+        } else {
+            tokenCache.delete(token);
+        }
     }
     
     try {
@@ -219,6 +234,10 @@ async function verifyDiscordToken(req, res, next) {
 
         const user = await userRes.json();
         console.log('✅ Token verified for:', user.username);
+        
+        // Cache the verified token
+        tokenCache.set(token, { user, timestamp: Date.now() });
+        
         req.user = user;
         next();
     } catch (error) {
