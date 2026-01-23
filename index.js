@@ -191,10 +191,12 @@ async function verifyDiscordToken(req, res, next) {
     const authHeader = req.headers['authorization'] || '';
     
     if (!authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ error: "Unauthorized" });
+        console.error('❌ Missing Bearer prefix in auth header');
+        return res.status(401).json({ error: "Unauthorized - Invalid format" });
     }
 
     const token = authHeader.substring(7);
+    console.log('🔐 Verifying token, first 20 chars:', token.substring(0, 20) + '...');
     
     if (token === process.env.BACKEND_SECRET || token === "status-bot-stats-secret-key") {
         req.user = { isBot: true };
@@ -202,19 +204,26 @@ async function verifyDiscordToken(req, res, next) {
     }
     
     try {
+        console.log('📡 Making Discord API call to verify token...');
         const userRes = await fetch('https://discord.com/api/v10/users/@me', {
             headers: { Authorization: `Bearer ${token}` }
         });
 
+        console.log('Discord API status:', userRes.status);
+
         if (!userRes.ok) {
-            return res.status(401).json({ error: "Unauthorized" });
+            const errorText = await userRes.text();
+            console.error('❌ Discord API rejected token:', userRes.status, errorText);
+            return res.status(401).json({ error: "Unauthorized - Token invalid or expired" });
         }
 
         const user = await userRes.json();
+        console.log('✅ Token verified for:', user.username);
         req.user = user;
         next();
     } catch (error) {
-        return res.status(401).json({ error: "Unauthorized" });
+        console.error('❌ Network error verifying token:', error.message);
+        return res.status(401).json({ error: "Unauthorized - Network error" });
     }
 }
 
