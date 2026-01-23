@@ -177,6 +177,33 @@ app.use(cors({
 
 app.use(express.json({ limit: "1mb" }));
 
+// =======================
+// REQUEST DEDUPLICATION
+// =======================
+
+const pendingRequests = new Map();
+
+async function deduplicateRequest(key, fn) {
+    // If this request is already being made, wait for it instead of making a duplicate
+    if (pendingRequests.has(key)) {
+        console.log(`⏳ Request ${key} already pending, waiting for result...`);
+        return pendingRequests.get(key);
+    }
+    
+    // Create the promise for this request
+    const promise = fn().then(result => {
+        pendingRequests.delete(key);
+        return result;
+    }).catch(error => {
+        pendingRequests.delete(key);
+        throw error;
+    });
+    
+    // Store it so duplicate requests wait for it
+    pendingRequests.set(key, promise);
+    return promise;
+}
+
 const groq = new Groq({
     apiKey: process.env.GROQ_API_KEY
 });
@@ -821,27 +848,30 @@ app.get('/api/guild/:guildId/members', async (req, res) => {
             return res.json({ members: guildMembersCache[guildId].data });
         }
 
-        const response = await fetchWithRetry(
-            `https://discord.com/api/v10/guilds/${guildId}/members?limit=1000`,
-            {
-                headers: {
-                    'Authorization': `Bot ${process.env.DISCORD_BOT_TOKEN}`
+        // Use deduplication to prevent duplicate API calls if multiple requests arrive simultaneously
+        const memberList = await deduplicateRequest(`members_${guildId}`, async () => {
+            const response = await fetchWithRetry(
+                `https://discord.com/api/v10/guilds/${guildId}/members?limit=1000`,
+                {
+                    headers: {
+                        'Authorization': `Bot ${process.env.DISCORD_BOT_TOKEN}`
+                    }
                 }
+            );
+
+            if (!response.ok) {
+                console.error(`Discord API returned ${response.status} for guild ${guildId}`);
+                throw new Error(`Discord API error: ${response.status}`);
             }
-        );
 
-        if (!response.ok) {
-            console.error(`Discord API returned ${response.status} for guild ${guildId}`);
-            return res.status(response.status).json({ error: "Failed to fetch guild members" });
-        }
-
-        const members = await response.json();
-        
-        const memberList = members.map(member => ({
-            id: member.user.id,
-            username: member.user.username,
-            displayName: member.nick || member.user.username
-        }));
+            const members = await response.json();
+            
+            return members.map(member => ({
+                id: member.user.id,
+                username: member.user.username,
+                displayName: member.nick || member.user.username
+            }));
+        });
 
         guildMembersCache[guildId] = {
             data: memberList,
