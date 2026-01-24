@@ -1,7 +1,4 @@
-
 // IMPORTS & CONFIGURATION
-
-
 import express from "express";
 import cors from "cors";
 import Groq from "groq-sdk";
@@ -21,8 +18,6 @@ if (!fs.existsSync(DATA_DIR)) {
 
 
 // GLOBAL STATE VARIABLES
-
-
 let botStats = {
     servers: 0,
     ping: 0,
@@ -74,8 +69,6 @@ loadKnownUsers();
 
 
 // SYSTEM PROMPTS
-
-
 const SYSTEM_PROMPT = `
 You are the official AI support assistant for Status Bot, a powerful Discord bot for server tracking, leveling, economy, welcome messages, and more.
 
@@ -179,8 +172,6 @@ app.use(express.json({ limit: "1mb" }));
 
 
 // REQUEST DEDUPLICATION
-
-
 const pendingRequests = new Map();
 
 async function deduplicateRequest(key, fn) {
@@ -212,8 +203,6 @@ app.options("*", cors());
 
 
 // AUTHENTICATION & TOKEN CACHE
-
-
 const tokenCache = new Map();
 const TOKEN_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
@@ -275,8 +264,6 @@ async function verifyDiscordToken(req, res, next) {
 
 
 // AI SUPPORT ENDPOINTS
-
-
 app.post("/api/support/ai", async (req, res) => {
     try {
         const message = req.body?.message?.trim();
@@ -322,8 +309,6 @@ app.get("/", (_, res) => {
 
 
 // BOT STATS ENDPOINTS
-
-
 app.post("/api/bot-stats/update", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -377,8 +362,6 @@ app.get("/api/bot-guilds", (req, res) => {
 
 
 // PREMIUM ENDPOINTS
-
-
 app.get("/api/user-premium/:userId", (req, res) => {
     const { userId } = req.params;
     
@@ -432,8 +415,6 @@ app.get("/api/user-premium/:userId", (req, res) => {
 
 
 // SERVER DATA ENDPOINTS
-
-
 app.get("/api/server-overview/:guildId", (req, res) => {
     const { guildId } = req.params;
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
@@ -670,6 +651,27 @@ app.post("/api/premium-data/get", (req, res) => {
     }
 });
 
+app.get("/api/logged-in-users", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const users = Object.entries(knownUsers).map(([userId, data]) => ({
+            id: userId,
+            loginCount: data.loginCount || 0,
+            lastLogin: data.lastLogin || null
+        }));
+        res.json({ users });
+    } catch (err) {
+        console.error('Error fetching logged-in users:', err);
+        res.status(500).json({ error: "Failed to fetch logged-in users" });
+    }
+});
+
 app.get("/api/premium/pending-dashboard-grants", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -742,8 +744,6 @@ app.post("/api/channels/:guildId", (req, res) => {
 
 
 // USER & MEMBER ENDPOINTS
-
-
 app.post("/api/resolve-user/:guildId", (req, res) => {
     const { guildId } = req.params;
     const { userReference } = req.body;
@@ -887,8 +887,6 @@ app.get('/api/guild/:guildId/members', async (req, res) => {
 
 
 // LEVELING ENDPOINTS
-
-
 app.get("/api/leveling/:guildId/settings", (req, res) => {
     const { guildId } = req.params;
 
@@ -1012,8 +1010,6 @@ app.get("/api/leveling/:guildId/leaderboard", (req, res) => {
 
 
 // ECONOMY ENDPOINTS
-
-
 app.get("/api/economy/:guildId/settings", (req, res) => {
     const { guildId } = req.params;
 
@@ -1173,8 +1169,6 @@ app.post("/api/economy/:guildId/reset-balances", verifyDiscordToken, (req, res) 
 
 
 // WELCOME ENDPOINTS
-
-
 app.get("/api/welcome/:guildId/settings", (req, res) => {
     const { guildId } = req.params;
 
@@ -1349,8 +1343,6 @@ app.post("/api/welcome/:guildId/member-goals", verifyDiscordToken, (req, res) =>
 
 
 // STATUS TRACKING ENDPOINTS
-
-
 app.get("/api/status-data", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -1711,8 +1703,6 @@ app.post("/api/status/:guildId/post", (req, res) => {
 
 
 // TRIALS & GIFTS ENDPOINTS
-
-
 app.post("/api/trials/send", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -2050,8 +2040,6 @@ app.post("/api/gifts/claim", (req, res) => {
 
 
 // NOTIFICATIONS ENDPOINTS
-
-
 app.post("/api/notifications/send", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
     const authHeader = req.headers['authorization'] || '';
@@ -2274,8 +2262,6 @@ app.post("/api/notifications/:notificationId/read", (req, res) => {
 
 
 // DATA MANAGEMENT FUNCTIONS
-
-
 function loadPremiumData() {
     try {
         const premiumDataPath = path.join(__dirname, 'premium_data.json');
@@ -2383,8 +2369,6 @@ loadPendingClaims();
 
 
 // USER CREDITS ENDPOINTS
-
-
 app.get("/api/premium-credits/:userId", (req, res) => {
     const authHeader = req.headers['authorization'] || '';
     const token = authHeader.replace('Bearer ', '');
@@ -2401,8 +2385,6 @@ app.get("/api/premium-credits/:userId", (req, res) => {
 
 
 // LOGS ENDPOINTS
-
-
 let allLogs = [];
 const MAX_LOGS = 5000;
 
@@ -2489,8 +2471,6 @@ app.get("/api/logs", (req, res) => {
 
 
 // STAFF APPLICATIONS
-
-
 const FORMS_FILE = path.join(__dirname, 'data', 'staff_forms.json');
 const SUBMISSIONS_FILE = path.join(__dirname, 'data', 'staff_submissions.json');
 
@@ -2724,9 +2704,62 @@ app.patch('/api/staff/submissions/:submissionId', (req, res) => {
 });
 
 
+// INITIALIZATION - LOAD DATA FROM FILES ON STARTUP
+function initializeSettingsFromFiles() {
+    try {
+        // Load leveling settings
+        const xpFilePath = path.join(__dirname, 'xp_settings.json');
+        if (fs.existsSync(xpFilePath)) {
+            global.xpSettings = JSON.parse(fs.readFileSync(xpFilePath, 'utf8'));
+        }
+    } catch (err) {
+        console.log('No leveling settings found to load');
+    }
+
+    try {
+        // Load economy settings
+        const economyFilePath = path.join(__dirname, 'economy_data.json');
+        if (fs.existsSync(economyFilePath)) {
+            const economyData = JSON.parse(fs.readFileSync(economyFilePath, 'utf8'));
+            if (economyData.settings) {
+                global.economySettings = economyData.settings;
+            }
+        }
+    } catch (err) {
+        console.log('No economy settings found to load');
+    }
+
+    try {
+        // Load status settings
+        const statusFilePath = path.join(__dirname, 'status_data.json');
+        if (fs.existsSync(statusFilePath)) {
+            const statusData = JSON.parse(fs.readFileSync(statusFilePath, 'utf8'));
+            if (statusData.settings) {
+                global.statusSettings = statusData.settings;
+            }
+        }
+    } catch (err) {
+        console.log('No status settings found to load');
+    }
+
+    try {
+        // Load welcome settings
+        const welcomeFilePath = path.join(__dirname, 'welcome_data.json');
+        if (fs.existsSync(welcomeFilePath)) {
+            const welcomeData = JSON.parse(fs.readFileSync(welcomeFilePath, 'utf8'));
+            global.welcomeSettings = welcomeData;
+        }
+    } catch (err) {
+        console.log('No welcome settings found to load');
+    }
+
+    console.log('✅ Settings initialized from files on startup');
+}
+
+initializeSettingsFromFiles();
+
+
 // SERVER STARTUP
-
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
