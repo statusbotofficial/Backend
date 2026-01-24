@@ -1427,6 +1427,24 @@ app.get("/api/status/:guildId/settings", (req, res) => {
     }
 });
 
+app.get("/api/status-data", (req, res) => {
+    // Endpoint for bot to fetch all status tracking data
+    try {
+        const statusFilePath = path.join(__dirname, 'status_data.json');
+        
+        if (fs.existsSync(statusFilePath)) {
+            const fileContent = fs.readFileSync(statusFilePath, 'utf8');
+            const statusData = JSON.parse(fileContent);
+            res.json(statusData);
+        } else {
+            res.json({});
+        }
+    } catch (err) {
+        console.error('Error fetching status data:', err);
+        res.json({});
+    }
+});
+
 app.post("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
