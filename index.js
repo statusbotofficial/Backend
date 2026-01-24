@@ -1,6 +1,6 @@
-// =======================
+
 // IMPORTS & CONFIGURATION
-// =======================
+
 
 import express from "express";
 import cors from "cors";
@@ -19,9 +19,9 @@ if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// =======================
+
 // GLOBAL STATE VARIABLES
-// =======================
+
 
 let botStats = {
     servers: 0,
@@ -72,9 +72,9 @@ function trackUser(userId) {
 
 loadKnownUsers();
 
-// =======================
+
 // SYSTEM PROMPTS
-// =======================
+
 
 const SYSTEM_PROMPT = `
 You are the official AI support assistant for Status Bot, a powerful Discord bot for server tracking, leveling, economy, welcome messages, and more.
@@ -160,9 +160,9 @@ REMEMBER:
 You're representing Status Bot's brand. Be helpful, honest, and human. Users appreciate a bot that admits limitations and knows when to ask for help!
 `;
 
-// =======================
+
 // MIDDLEWARE & UTILITIES
-// =======================
+
 
 app.use(cors({
     origin: [
@@ -177,9 +177,9 @@ app.use(cors({
 
 app.use(express.json({ limit: "1mb" }));
 
-// =======================
+
 // REQUEST DEDUPLICATION
-// =======================
+
 
 const pendingRequests = new Map();
 
@@ -210,9 +210,9 @@ const groq = new Groq({
 
 app.options("*", cors());
 
-// =======================
+
 // AUTHENTICATION & TOKEN CACHE
-// =======================
+
 
 const tokenCache = new Map();
 const TOKEN_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -273,9 +273,9 @@ async function verifyDiscordToken(req, res, next) {
     }
 }
 
-// =======================
+
 // AI SUPPORT ENDPOINTS
-// =======================
+
 
 app.post("/api/support/ai", async (req, res) => {
     try {
@@ -320,9 +320,9 @@ app.get("/", (_, res) => {
     res.send("Status Bot Support API is running.");
 });
 
-// =======================
+
 // BOT STATS ENDPOINTS
-// =======================
+
 
 app.post("/api/bot-stats/update", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
@@ -375,9 +375,9 @@ app.get("/api/bot-guilds", (req, res) => {
     });
 });
 
-// =======================
+
 // PREMIUM ENDPOINTS
-// =======================
+
 
 app.get("/api/user-premium/:userId", (req, res) => {
     const { userId } = req.params;
@@ -430,9 +430,9 @@ app.get("/api/user-premium/:userId", (req, res) => {
     }
 });
 
-// =======================
+
 // SERVER DATA ENDPOINTS
-// =======================
+
 
 app.get("/api/server-overview/:guildId", (req, res) => {
     const { guildId } = req.params;
@@ -740,9 +740,9 @@ app.post("/api/channels/:guildId", (req, res) => {
     });
 });
 
-// =======================
+
 // USER & MEMBER ENDPOINTS
-// =======================
+
 
 app.post("/api/resolve-user/:guildId", (req, res) => {
     const { guildId } = req.params;
@@ -885,9 +885,9 @@ app.get('/api/guild/:guildId/members', async (req, res) => {
     }
 });
 
-// =======================
+
 // LEVELING ENDPOINTS
-// =======================
+
 
 app.get("/api/leveling/:guildId/settings", (req, res) => {
     const { guildId } = req.params;
@@ -1010,9 +1010,9 @@ app.get("/api/leveling/:guildId/leaderboard", (req, res) => {
     });
 });
 
-// =======================
+
 // ECONOMY ENDPOINTS
-// =======================
+
 
 app.get("/api/economy/:guildId/settings", (req, res) => {
     const { guildId } = req.params;
@@ -1171,9 +1171,9 @@ app.post("/api/economy/:guildId/reset-balances", verifyDiscordToken, (req, res) 
     }
 });
 
-// =======================
+
 // WELCOME ENDPOINTS
-// =======================
+
 
 app.get("/api/welcome/:guildId/settings", (req, res) => {
     const { guildId } = req.params;
@@ -1191,7 +1191,7 @@ app.get("/api/welcome/:guildId/settings", (req, res) => {
             enabled: false,
             use_embed: false,
             channel_id: null,
-            message_text: 'Welcome to {servername}, {user}!',
+            message_text: 'Welcome to {server_name}, {user}!',
             embed_title: 'Welcome!',
             embed_description: '',
             embed_footer: 'Thanks for joining!',
@@ -1217,7 +1217,7 @@ app.get("/api/welcome/:guildId/settings", (req, res) => {
             enabled: false,
             use_embed: false,
             channel_id: null,
-            message_text: 'Welcome to {servername}, {user}!',
+            message_text: 'Welcome to {server_name}, {user}!',
             embed_title: 'Welcome!',
             embed_description: '',
             embed_footer: 'Thanks for joining!',
@@ -1249,7 +1249,7 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
         enabled: enabled === true,
         use_embed: use_embed === true,
         channel_id: channel_id || null,
-        message_text: message_text || "Welcome to our server, {user}!",
+        message_text: message_text || "Welcome to {server_name}, {user}!",
         embed_title: embed_title || "Welcome!",
         embed_description: embed_description || "",
         embed_footer: embed_footer || "",
@@ -1280,7 +1280,7 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
             enabled: enabled === true,
             use_embed: use_embed === true,
             channel_id: channel_id || null,
-            message_text: message_text || "Welcome to our server, {user}!",
+            message_text: message_text || "Welcome to {server_name}, {user}!",
             embed_title: embed_title || "Welcome!",
             embed_description: embed_description || "",
             embed_footer: embed_footer || "",
@@ -1347,9 +1347,9 @@ app.post("/api/welcome/:guildId/member-goals", verifyDiscordToken, (req, res) =>
     });
 });
 
-// =======================
+
 // STATUS TRACKING ENDPOINTS
-// =======================
+
 
 app.get("/api/status-data", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
@@ -1709,9 +1709,9 @@ app.post("/api/status/:guildId/post", (req, res) => {
     }
 });
 
-// =======================
+
 // TRIALS & GIFTS ENDPOINTS
-// =======================
+
 
 app.post("/api/trials/send", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
@@ -2048,9 +2048,9 @@ app.post("/api/gifts/claim", (req, res) => {
     }
 });
 
-// =======================
+
 // NOTIFICATIONS ENDPOINTS
-// =======================
+
 
 app.post("/api/notifications/send", (req, res) => {
     const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
@@ -2272,9 +2272,9 @@ app.post("/api/notifications/:notificationId/read", (req, res) => {
     }
 });
 
-// =======================
+
 // DATA MANAGEMENT FUNCTIONS
-// =======================
+
 
 function loadPremiumData() {
     try {
@@ -2381,9 +2381,9 @@ loadGlobalData();
 
 loadPendingClaims();
 
-// =======================
+
 // USER CREDITS ENDPOINTS
-// =======================
+
 
 app.get("/api/premium-credits/:userId", (req, res) => {
     const authHeader = req.headers['authorization'] || '';
@@ -2399,9 +2399,9 @@ app.get("/api/premium-credits/:userId", (req, res) => {
     res.json({ userId, credits: userCredits });
 });
 
-// =======================
+
 // LOGS ENDPOINTS
-// =======================
+
 
 let allLogs = [];
 const MAX_LOGS = 5000;
@@ -2487,9 +2487,9 @@ app.get("/api/logs", (req, res) => {
     }
 });
 
-// =======================
+
 // STAFF APPLICATIONS
-// =======================
+
 
 const FORMS_FILE = path.join(__dirname, 'data', 'staff_forms.json');
 const SUBMISSIONS_FILE = path.join(__dirname, 'data', 'staff_submissions.json');
@@ -2723,9 +2723,9 @@ app.patch('/api/staff/submissions/:submissionId', (req, res) => {
     }
 });
 
-// =======================
+
 // SERVER STARTUP
-// =======================
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
