@@ -1193,13 +1193,12 @@ app.get("/api/welcome/:guildId/settings", (req, res) => {
             channel_id: null,
             message_text: 'Welcome to {servername}, {user}!',
             embed_title: 'Welcome!',
-            embed_description: 'Welcome to {servername}! We\'re glad to have you here.',
+            embed_description: '',
             embed_footer: 'Thanks for joining!',
             embed_thumbnail: '',
             embed_image: '',
             embed_color: '#5170ff',
-            embed_field_name: '',
-            embed_field_value: '',
+            embed_fields: '[]',
             member_count_channel_id: null,
             member_goal_channel_id: null,
             member_goal: 0
@@ -1220,13 +1219,12 @@ app.get("/api/welcome/:guildId/settings", (req, res) => {
             channel_id: null,
             message_text: 'Welcome to {servername}, {user}!',
             embed_title: 'Welcome!',
-            embed_description: 'Welcome to {servername}! We\'re glad to have you here.',
+            embed_description: '',
             embed_footer: 'Thanks for joining!',
             embed_thumbnail: '',
             embed_image: '',
             embed_color: '#5170ff',
-            embed_field_name: '',
-            embed_field_value: '',
+            embed_fields: '[]',
             member_count_channel_id: null,
             member_goal_channel_id: null,
             member_goal: 0
@@ -1237,7 +1235,7 @@ app.get("/api/welcome/:guildId/settings", (req, res) => {
 app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
-    const { enabled, use_embed, channel_id, message_text, embed_title, embed_description, embed_footer, embed_thumbnail, embed_image, embed_color, embed_field_name, embed_field_value, member_count_channel_id, member_goal_channel_id, member_goal } = req.body;
+    const { enabled, use_embed, channel_id, message_text, embed_title, embed_description, embed_footer, embed_thumbnail, embed_image, embed_color, embed_fields, member_count_channel_id, member_goal_channel_id, member_goal } = req.body;
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
@@ -1253,13 +1251,12 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
         channel_id: channel_id || null,
         message_text: message_text || "Welcome to our server, {user}!",
         embed_title: embed_title || "Welcome!",
-        embed_description: embed_description || "Welcome to our server!",
+        embed_description: embed_description || "",
         embed_footer: embed_footer || "",
         embed_thumbnail: embed_thumbnail || "",
         embed_image: embed_image || "",
         embed_color: embed_color || "#5170ff",
-        embed_field_name: embed_field_name || "",
-        embed_field_value: embed_field_value || "",
+        embed_fields: embed_fields || "[]",
         member_count_channel_id: member_count_channel_id || null,
         member_goal_channel_id: member_goal_channel_id || null,
         member_goal: member_goal || 0,
