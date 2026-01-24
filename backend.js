@@ -143,7 +143,7 @@ KEY RESOURCES:
 - <a href='https://status-bot.xyz/docs'>Documentation</a>
 
 HOW TO INVITE STATUS BOT:
-Direct users to click <a href='https://discord.com/api/oauth2/authorize?client_id=1436123870158520411&permissions=8&scope=bot%20applications.commands'>this invite link</a> to add the bot to their server.
+Direct users to click <a href='https://discord.com/api/oauth2/authorize?client_id=1457454614826848276&permissions=8&scope=bot%20applications.commands'>this invite link</a> to add the bot to their server.
 
 COMMON SCENARIOS YOU'LL ENCOUNTER:
 - Setup questions → Direct to Dashboard and setup guide
