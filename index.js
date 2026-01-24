@@ -850,6 +850,7 @@ app.get('/api/guild/:guildId/members', async (req, res) => {
 
         // Use deduplication to prevent duplicate API calls if multiple requests arrive simultaneously
         const memberList = await deduplicateRequest(`members_${guildId}`, async () => {
+            console.log(`📡 Fetching members from Discord for guild ${guildId}...`);
             const response = await fetchWithRetry(
                 `https://discord.com/api/v10/guilds/${guildId}/members?limit=1000`,
                 {
@@ -860,17 +861,36 @@ app.get('/api/guild/:guildId/members', async (req, res) => {
             );
 
             if (!response.ok) {
-                console.error(`Discord API returned ${response.status} for guild ${guildId}`);
-                throw new Error(`Discord API error: ${response.status}`);
+                const errorText = await response.text();
+                console.error(`Discord API error ${response.status} for guild ${guildId}:`, errorText);
+                throw new Error(`Discord API error: ${response.status} - ${errorText}`);
             }
 
             const members = await response.json();
+            console.log(`✅ Received ${members.length} members from Discord`);
             
-            return members.map(member => ({
-                id: member.user.id,
-                username: member.user.username,
-                displayName: member.nick || member.user.username
-            }));
+            if (!Array.isArray(members)) {
+                console.error('❌ Members response is not an array:', typeof members);
+                throw new Error('Invalid Discord API response - not an array');
+            }
+
+            return members.map((member, idx) => {
+                try {
+                    if (!member.user) {
+                        console.warn(`⚠️ Member ${idx} missing user object:`, JSON.stringify(member).substring(0, 100));
+                        return null;
+                    }
+                    return {
+                        id: member.user.id,
+                        username: member.user.username,
+                        avatar: member.user.avatar,
+                        displayName: member.nick || member.user.username
+                    };
+                } catch (mapErr) {
+                    console.error(`Error mapping member ${idx}:`, mapErr);
+                    return null;
+                }
+            }).filter(m => m !== null);
         });
 
         guildMembersCache[guildId] = {
