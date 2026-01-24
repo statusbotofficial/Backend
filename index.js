@@ -274,6 +274,45 @@ async function verifyDiscordToken(req, res, next) {
 }
 
 // =======================
+// OAUTH ENDPOINTS
+// =======================
+
+app.post("/api/oauth/exchange", async (req, res) => {
+    const { code } = req.body;
+    
+    if (!code) {
+        return res.status(400).json({ error: "Missing authorization code" });
+    }
+    
+    try {
+        const tokenResponse = await fetch('https://discord.com/api/v10/oauth2/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                client_id: process.env.DISCORD_CLIENT_ID || '1464615300740939991',
+                client_secret: process.env.DISCORD_CLIENT_SECRET || process.env.BACKEND_SECRET,
+                code,
+                grant_type: 'authorization_code',
+                redirect_uri: 'https://status-bot.xyz/redirect'
+            })
+        });
+        
+        if (!tokenResponse.ok) {
+            const error = await tokenResponse.text();
+            console.error('Discord token exchange failed:', tokenResponse.status, error);
+            return res.status(401).json({ error: "Failed to exchange code for token" });
+        }
+        
+        const tokenData = await tokenResponse.json();
+        console.log('✅ Successfully exchanged code for token');
+        res.json({ access_token: tokenData.access_token });
+    } catch (err) {
+        console.error('OAuth exchange error:', err);
+        res.status(500).json({ error: "Internal server error during token exchange" });
+    }
+});
+
+// =======================
 // AI SUPPORT ENDPOINTS
 // =======================
 
