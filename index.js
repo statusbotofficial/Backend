@@ -1448,7 +1448,14 @@ app.get("/api/status-data", (req, res) => {
 app.post("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
-    const { enabled, userToTrack, trackingChannel, delay, automatic, useEmbed, offlineMessage } = req.body;
+    const { enabled, user_id, channel_id, delay_seconds, automatic, use_embed, offline_message, userToTrack, trackingChannel, delay, useEmbed, offlineMessage } = req.body;
+    
+    // Support both camelCase and snake_case for backward compatibility
+    const userId = user_id || userToTrack || "";
+    const channelId = channel_id || trackingChannel || "";
+    const delayValue = delay_seconds !== undefined ? delay_seconds : (delay || 30);
+    const useEmbedValue = use_embed !== undefined ? use_embed : useEmbed;
+    const offlineMsg = offline_message || offlineMessage || "User is currently offline";
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
@@ -1473,7 +1480,7 @@ app.post("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
         
         // QUEUE DELETION BEFORE CLEARING MESSAGE ID if channel/message changed
         if (oldMessageId && oldMessageId !== "" && oldMessageId !== "undefined" && oldChannelId && oldChannelId !== "" && oldChannelId !== "undefined") {
-            if (oldChannelId !== trackingChannel) {
+            if (oldChannelId !== channelId) {
                 try {
                     let pendingPosts = { posts: [] };
                     const pendingPath = path.join(__dirname, 'pending_posts.json');
@@ -1513,12 +1520,12 @@ app.post("/api/status/:guildId/settings", verifyDiscordToken, (req, res) => {
         
         statusData.settings[guildId] = {
             enabled: enabled === true,
-            user_id: userToTrack || "",
-            channel_id: trackingChannel || "",
-            delay_seconds: delay || 30,
-            offline_message: offlineMessage || "User is currently offline",
+            user_id: userId,
+            channel_id: channelId,
+            delay_seconds: delayValue,
+            offline_message: offlineMsg,
             automatic: automatic === true,
-            use_embed: useEmbed === true,
+            use_embed: useEmbedValue === true,
             message_id: "", // Always post new message
             created_at: oldSettings.created_at || new Date().toISOString()
         };
