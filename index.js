@@ -1754,7 +1754,7 @@ app.post("/api/trials/send", (req, res) => {
         const trial = {
             id: trialId,
             name: `${premiumDays} Day Status Bot Premium Trial`,
-            code: trialId,
+            code: `||${trialId}||`,
             dashboardDurationDays: dashboardDays,
             premiumTrialDurationDays: premiumDays,
             createdAt,
@@ -1806,15 +1806,19 @@ app.post("/api/trials/send", (req, res) => {
             allUserIds.forEach(targetUserId => {
                 sendTrialToUser(targetUserId);
             });
+            globalGifts.push(trial);
             saveNotifications();
+            savePremiumData(premiumCache);
         } else if (targetUsers && Array.isArray(targetUsers) && targetUsers.length > 0) {
             targetUsers.forEach(targetUserId => {
                 sendTrialToUser(targetUserId);
             });
             saveNotifications();
+            savePremiumData(premiumCache);
         } else {
             sendTrialToUser(userId);
             saveNotifications();
+            savePremiumData(premiumCache);
         }
 
         res.json({ 
@@ -1999,6 +2003,12 @@ app.get("/api/user/:userId/gifts", (req, res) => {
                 return expiryTime > now && !gift.claimed;
             });
         }
+
+        const activeGlobalGifts = globalGifts.filter(gift => {
+            const expiryTime = gift.dashboardExpiresAt || gift.expiresAt;
+            return expiryTime > now && !gift.claimed;
+        });
+        gifts = gifts.concat(activeGlobalGifts);
 
         res.json({ gifts });
     } catch (err) {
