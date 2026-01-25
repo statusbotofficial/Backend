@@ -618,7 +618,18 @@ app.get("/api/premium-data", (req, res) => {
     }
 
     try {
-        res.json({ premiumCache });
+        console.log('[PREMIUM-DATA] Returning premiumCache:', JSON.stringify(premiumCache, null, 2));
+        
+        // Normalize the data to use 'expiry' field name consistently
+        const normalizedCache = {};
+        for (const [userId, data] of Object.entries(premiumCache)) {
+            normalizedCache[userId] = {
+                ...data,
+                expiry: data.expiry || data.expiresAt  // Use 'expiry' field name consistently
+            };
+        }
+        
+        res.json({ premiumCache: normalizedCache });
     } catch (err) {
         console.error('Error fetching premium data:', err);
         res.status(500).json({ error: "Failed to fetch premium data" });
@@ -639,7 +650,7 @@ app.post("/api/premium-data/get", (req, res) => {
             botFormat[userId] = {
                 active: cacheData.active || false,
                 source: cacheData.source || 'unknown',
-                expiry: cacheData.expiresAt || null,
+                expiry: cacheData.expiry || cacheData.expiresAt || null,
                 duration_days: cacheData.duration_days || null,
                 activated_at: new Date().toISOString()
             };
@@ -2353,11 +2364,14 @@ function loadPremiumData() {
 
 function savePremiumData(data) {
     try {
+        console.log('[SAVE-PREMIUM] Saving premium data:', JSON.stringify(data, null, 2));
         const premiumDataPath = path.join(__dirname, 'premium_data.json');
         fs.writeFileSync(premiumDataPath, JSON.stringify(data, null, 4));
+        console.log('[SAVE-PREMIUM] Updating premiumCache with saved data');
         Object.keys(data).forEach(key => {
             premiumCache[key] = data[key];
         });
+        console.log('[SAVE-PREMIUM] premiumCache after update:', JSON.stringify(premiumCache, null, 2));
     } catch (err) {
         console.error('Error saving premium data:', err);
     }
