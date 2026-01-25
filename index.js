@@ -1784,12 +1784,14 @@ app.post("/api/trials/send", (req, res) => {
                 if (!premiumCache[userIdStr]) {
                     premiumCache[userIdStr] = {
                         active: false,
-                        expiresAt: null
+                        expiry: null
                     };
                 }
                 premiumCache[userIdStr].active = true;
-                premiumCache[userIdStr].expiresAt = premiumExpiresAt;
+                premiumCache[userIdStr].expiry = Math.floor(premiumExpiresAt / 1000);
                 premiumCache[userIdStr].reason = "Trial";
+                premiumCache[userIdStr].source = "trial";
+                premiumCache[userIdStr].duration_days = premiumDays;
                 
                 sent++;
             } else {
@@ -1803,10 +1805,26 @@ app.post("/api/trials/send", (req, res) => {
                 return res.status(400).json({ error: "No users have logged in yet. Send to specific user IDs instead." });
             }
             
-            allUserIds.forEach(targetUserId => {
-                sendTrialToUser(targetUserId);
-            });
+            // For global sends, only add to globalGifts, not individual user notifications
             globalGifts.push(trial);
+            
+            // Still activate premium for all currently logged in users
+            allUserIds.forEach(targetUserId => {
+                const userIdStr = String(targetUserId);
+                if (!premiumCache[userIdStr]) {
+                    premiumCache[userIdStr] = {
+                        active: false,
+                        expiry: null
+                    };
+                }
+                premiumCache[userIdStr].active = true;
+                premiumCache[userIdStr].expiry = Math.floor(premiumExpiresAt / 1000);
+                premiumCache[userIdStr].reason = "Trial";
+                premiumCache[userIdStr].source = "trial";
+                premiumCache[userIdStr].duration_days = premiumDays;
+                sent++;
+            });
+            
             saveNotifications();
             savePremiumData(premiumCache);
         } else if (targetUsers && Array.isArray(targetUsers) && targetUsers.length > 0) {
