@@ -2033,39 +2033,51 @@ app.post("/api/gifts/claim", (req, res) => {
         }
         
         const userNotifications = notificationsData[String(userId)];
+        let gift = null;
+        
+        // Check user-specific gifts first
         if (userNotifications && userNotifications.gifts) {
-            const gift = userNotifications.gifts.find(g => g.id === giftId);
+            gift = userNotifications.gifts.find(g => g.id === giftId);
             if (gift) {
                 gift.claimed = true;
                 gift.claimedAt = Date.now();
-                
-                const claimId = `claim_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                const expiryTime = Math.floor(Date.now() / 1000) + (gift.premiumTrialDurationDays * 24 * 60 * 60);
-
-                pendingPremiumClaims[claimId] = {
-                    userId: String(userId),
-                    giftId: giftId,
-                    durationDays: gift.premiumTrialDurationDays,
-                    expiryTime,
-                    createdAt: Date.now(),
-                    processed: false,
-                    processedAt: null
-                };
-                
-                saveNotifications();
-                savePendingClaims();
-                
-                res.json({ 
-                    success: true, 
-                    message: "Gift claimed successfully! Premium will be activated shortly.",
-                    claimId,
-                    gift 
-                });
-            } else {
-                res.status(404).json({ error: "Gift not found" });
             }
+        }
+        
+        // If not found, check global gifts
+        if (!gift) {
+            gift = globalGifts.find(g => g.id === giftId);
+            if (gift) {
+                gift.claimed = true;
+                gift.claimedAt = Date.now();
+            }
+        }
+        
+        if (gift) {
+            const claimId = `claim_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const expiryTime = Math.floor(Date.now() / 1000) + (gift.premiumTrialDurationDays * 24 * 60 * 60);
+
+            pendingPremiumClaims[claimId] = {
+                userId: String(userId),
+                giftId: giftId,
+                durationDays: gift.premiumTrialDurationDays,
+                expiryTime,
+                createdAt: Date.now(),
+                processed: false,
+                processedAt: null
+            };
+            
+            saveNotifications();
+            savePendingClaims();
+            
+            res.json({ 
+                success: true, 
+                message: "Gift claimed successfully! Premium will be activated shortly.",
+                claimId,
+                gift 
+            });
         } else {
-            res.status(404).json({ error: "No gifts found for this user" });
+            res.status(404).json({ error: "Gift not found" });
         }
     } catch (err) {
         console.error('Error claiming gift:', err);
