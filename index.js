@@ -1737,6 +1737,7 @@ app.post("/api/trials/send", (req, res) => {
     }
 
     try {
+        console.log('[TRIAL] Received trial send request:', req.body);
         const { userId, dashboardDurationDays, premiumTrialDurationDays, targetUsers, sendToAll } = req.body;
         
         if (!userId) {
@@ -1750,6 +1751,8 @@ app.post("/api/trials/send", (req, res) => {
         const createdAt = Date.now();
         const dashboardExpiresAt = createdAt + (dashboardDays * 24 * 60 * 60 * 1000);
         const premiumExpiresAt = createdAt + (premiumDays * 24 * 60 * 60 * 1000);
+
+        console.log(`[TRIAL] Created trial ${trialId} for ${premiumDays} days, expires at ${new Date(premiumExpiresAt).toISOString()}`);
 
         const trial = {
             id: trialId,
@@ -1792,6 +1795,7 @@ app.post("/api/trials/send", (req, res) => {
                 premiumCache[userIdStr].reason = "Trial";
                 premiumCache[userIdStr].source = "trial";
                 premiumCache[userIdStr].duration_days = premiumDays;
+                console.log(`[TRIAL] Activated premium for user ${userIdStr}, expiry: ${Math.floor(premiumExpiresAt / 1000)}`);
                 
                 sent++;
             } else {
@@ -1801,12 +1805,14 @@ app.post("/api/trials/send", (req, res) => {
 
         if (sendToAll || (targetUsers && targetUsers.length === 0)) {
             const allUserIds = Object.keys(knownUsers);
+            console.log(`[TRIAL] Sending to all users. Known users: ${allUserIds.length}`);
             if (allUserIds.length === 0) {
                 return res.status(400).json({ error: "No users have logged in yet. Send to specific user IDs instead." });
             }
             
             // For global sends, only add to globalGifts, not individual user notifications
             globalGifts.push(trial);
+            console.log(`[TRIAL] Added to globalGifts. Total global gifts: ${globalGifts.length}`);
             
             // Still activate premium for all currently logged in users
             allUserIds.forEach(targetUserId => {
@@ -1822,23 +1828,29 @@ app.post("/api/trials/send", (req, res) => {
                 premiumCache[userIdStr].reason = "Trial";
                 premiumCache[userIdStr].source = "trial";
                 premiumCache[userIdStr].duration_days = premiumDays;
+                console.log(`[TRIAL] Set premium for ${userIdStr}: expiry=${premiumCache[userIdStr].expiry}`);
                 sent++;
             });
             
             saveNotifications();
+            console.log('[TRIAL] Saved notifications');
             savePremiumData(premiumCache);
+            console.log('[TRIAL] Saved premium data to file');
         } else if (targetUsers && Array.isArray(targetUsers) && targetUsers.length > 0) {
+            console.log(`[TRIAL] Sending to specific users: ${targetUsers}`);
             targetUsers.forEach(targetUserId => {
                 sendTrialToUser(targetUserId);
             });
             saveNotifications();
             savePremiumData(premiumCache);
         } else {
+            console.log(`[TRIAL] Sending to single user: ${userId}`);
             sendTrialToUser(userId);
             saveNotifications();
             savePremiumData(premiumCache);
         }
 
+        console.log(`[TRIAL] Trial send complete: sent=${sent}, skipped=${skipped}`);
         res.json({ 
             success: true, 
             message: `Trial sent to ${sent} users (${skipped} skipped due to disabled preferences). Premium activated for ${sent} users until ${new Date(premiumExpiresAt).toISOString()}`,
@@ -1849,7 +1861,7 @@ app.post("/api/trials/send", (req, res) => {
             premiumExpiresAt
         });
     } catch (err) {
-        console.error('Error creating trial:', err);
+        console.error('[TRIAL] Error creating trial:', err);
         res.status(500).json({ error: "Failed to create trial", details: err.message });
     }
 });
