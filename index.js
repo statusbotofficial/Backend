@@ -1755,32 +1755,35 @@ app.post("/api/trials/send", (req, res) => {
         const dashboardDays = dashboardDurationDays || 7;
         const premiumDays = premiumTrialDurationDays || 7;
 
-        const trialId = `trial_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const createdAt = Date.now();
         const dashboardExpiresAt = createdAt + (dashboardDays * 24 * 60 * 60 * 1000);
         const premiumExpiresAt = createdAt + (premiumDays * 24 * 60 * 60 * 1000);
 
-        const trial = {
-            id: trialId,
-            name: `${premiumDays} Day Status Bot Premium Trial`,
-            code: `||${trialId}||`,
-            dashboardDurationDays: dashboardDays,
-            premiumTrialDurationDays: premiumDays,
-            createdAt,
-            dashboardExpiresAt,
-            premiumExpiresAt,
-            claimed: false,
-            claimedAt: null,
-            isGlobal: sendToAll || (targetUsers && targetUsers.length === 0)
-        };
-
         let sent = 0;
         let skipped = 0;
+        const createdTrials = [];
 
         const sendTrialToUser = (targetUserId) => {
             const userPrefs = userNotificationPreferences[String(targetUserId)] || { trials: true };
             
             if (userPrefs.trials !== false) {
+                // Generate a UNIQUE trial code for each user
+                const trialId = `trial_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${targetUserId}`;
+                
+                const trial = {
+                    id: trialId,
+                    name: `${premiumDays} Day Status Bot Premium Trial`,
+                    code: `||${trialId}||`,
+                    dashboardDurationDays: dashboardDays,
+                    premiumTrialDurationDays: premiumDays,
+                    createdAt,
+                    dashboardExpiresAt,
+                    premiumExpiresAt,
+                    claimed: false,
+                    claimedAt: null,
+                    isGlobal: sendToAll || (targetUsers && targetUsers.length === 0)
+                };
+                
                 if (!notificationsData[String(targetUserId)]) {
                     notificationsData[String(targetUserId)] = { notifications: [], gifts: [] };
                 }
@@ -1802,6 +1805,7 @@ app.post("/api/trials/send", (req, res) => {
                 premiumCache[userIdStr].source = "trial";
                 premiumCache[userIdStr].duration_days = premiumDays;
                 
+                createdTrials.push(trial);
                 sent++;
             } else {
                 skipped++;
@@ -1814,24 +1818,9 @@ app.post("/api/trials/send", (req, res) => {
                 return res.status(400).json({ error: "No users have logged in yet. Send to specific user IDs instead." });
             }
             
-            // For global sends, only add to globalGifts, not individual user notifications
-            globalGifts.push(trial);
-            
-            // Still activate premium for all currently logged in users
+            // Send unique trial to each user
             allUserIds.forEach(targetUserId => {
-                const userIdStr = String(targetUserId);
-                if (!premiumCache[userIdStr]) {
-                    premiumCache[userIdStr] = {
-                        active: false,
-                        expiry: null
-                    };
-                }
-                premiumCache[userIdStr].active = true;
-                premiumCache[userIdStr].expiry = Math.floor(premiumExpiresAt / 1000);
-                premiumCache[userIdStr].reason = "Trial";
-                premiumCache[userIdStr].source = "trial";
-                premiumCache[userIdStr].duration_days = premiumDays;
-                sent++;
+                sendTrialToUser(targetUserId);
             });
             
             saveNotifications();
@@ -1850,11 +1839,11 @@ app.post("/api/trials/send", (req, res) => {
 
         res.json({ 
             success: true, 
-            message: `Trial sent to ${sent} users (${skipped} skipped due to disabled preferences). Premium activated for ${sent} users until ${new Date(premiumExpiresAt).toISOString()}`,
+            message: `Trial sent to ${sent} users (${skipped} skipped due to disabled preferences). Each user received their own unique trial code.`,
             sent,
             skipped,
             total: sent + skipped,
-            trialId,
+            trialsCreated: createdTrials.length,
             premiumExpiresAt
         });
     } catch (err) {
