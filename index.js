@@ -1350,6 +1350,125 @@ app.post("/api/welcome/:guildId/member-goals", verifyDiscordToken, (req, res) =>
     });
 });
 
+// LEAVE MESSAGE ENDPOINTS
+app.get("/api/leave/:guildId/settings", (req, res) => {
+    const { guildId } = req.params;
+
+    try {
+        let leaveData = {};
+        const leaveFilePath = path.join(__dirname, 'leave_data.json');
+        
+        if (fs.existsSync(leaveFilePath)) {
+            const fileContent = fs.readFileSync(leaveFilePath, 'utf8');
+            leaveData = JSON.parse(fileContent);
+        }
+
+        const defaultSettings = {
+            enabled: false,
+            use_embed: false,
+            channel_id: null,
+            message_text: 'Goodbye {user}!',
+            embed_title: 'Member Left',
+            embed_description: '',
+            embed_footer: '',
+            embed_thumbnail: '',
+            embed_image: '',
+            embed_color: '#5170ff',
+            embed_fields: '[]'
+        };
+
+        let settings = defaultSettings;
+        
+        if (leaveData[guildId]) {
+            settings = leaveData[guildId];
+        }
+
+        res.json(settings);
+    } catch (err) {
+        console.error('Error reading leave settings:', err);
+        res.json({
+            enabled: false,
+            use_embed: false,
+            channel_id: null,
+            message_text: 'Goodbye {user}!',
+            embed_title: 'Member Left',
+            embed_description: '',
+            embed_footer: '',
+            embed_thumbnail: '',
+            embed_image: '',
+            embed_color: '#5170ff',
+            embed_fields: '[]'
+        });
+    }
+});
+
+app.post("/api/leave/:guildId/settings", verifyDiscordToken, (req, res) => {
+    const { guildId } = req.params;
+
+    const { enabled, use_embed, channel_id, message_text, embed_title, embed_description, embed_footer, embed_thumbnail, embed_image, embed_color, embed_fields } = req.body;
+
+    if (!guildId) {
+        return res.status(400).json({ error: "guildId is required" });
+    }
+
+    if (!global.leaveSettings) {
+        global.leaveSettings = {};
+    }
+
+    global.leaveSettings[guildId] = {
+        enabled: enabled === true,
+        use_embed: use_embed === true,
+        channel_id: channel_id || null,
+        message_text: message_text || "Goodbye {user}!",
+        embed_title: embed_title || "Member Left",
+        embed_description: embed_description || "",
+        embed_footer: embed_footer || "",
+        embed_thumbnail: embed_thumbnail || "",
+        embed_image: embed_image || "",
+        embed_color: embed_color || "#5170ff",
+        embed_fields: embed_fields || "[]",
+        lastUpdated: new Date().toISOString()
+    };
+
+    try {
+        let leaveData = {};
+        const leaveFilePath = path.join(__dirname, 'leave_data.json');
+        
+        try {
+            if (fs.existsSync(leaveFilePath)) {
+                const fileContent = fs.readFileSync(leaveFilePath, 'utf8');
+                leaveData = JSON.parse(fileContent);
+            }
+        } catch (err) {
+            console.log('Creating new leave_data.json file');
+        }
+        
+        leaveData[guildId] = {
+            enabled: enabled === true,
+            use_embed: use_embed === true,
+            channel_id: channel_id || null,
+            message_text: message_text || "Goodbye {user}!",
+            embed_title: embed_title || "Member Left",
+            embed_description: embed_description || "",
+            embed_footer: embed_footer || "",
+            embed_thumbnail: embed_thumbnail || "",
+            embed_image: embed_image || "",
+            embed_color: embed_color || "#5170ff",
+            embed_fields: embed_fields || "[]"
+        };
+        
+        fs.writeFileSync(leaveFilePath, JSON.stringify(leaveData, null, 4));
+        console.log(`✅ Leave settings saved to file for guild ${guildId}:`, JSON.stringify(leaveData[guildId], null, 2));
+    } catch (err) {
+        console.error('Error saving leave settings to file:', err);
+    }
+
+    res.json({ 
+        success: true, 
+        message: "Leave settings saved", 
+        settings: global.leaveSettings[guildId]
+    });
+});
 
 // STATUS TRACKING ENDPOINTS
 app.get("/api/status-data", (req, res) => {
