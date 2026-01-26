@@ -1854,6 +1854,62 @@ app.post("/api/status/:guildId/post", (req, res) => {
     }
 });
 
+app.post("/api/status/:guildId/force-update", verifyDiscordToken, (req, res) => {
+    const { guildId } = req.params;
+    const { user_id } = req.body;
+
+    if (!guildId || !user_id) {
+        return res.status(400).json({ error: "guildId and user_id are required" });
+    }
+
+    try {
+        // Queue an immediate status update by sending it to the pending posts
+        if (!global.statusPendingPosts) {
+            global.statusPendingPosts = [];
+        }
+
+        // Load settings from global cache or from file
+        let statusSettings = global.statusSettings ? global.statusSettings[guildId] : null;
+        
+        if (!statusSettings) {
+            // Try loading from file if not in memory
+            try {
+                const statusFilePath = path.join(__dirname, 'status_data.json');
+                if (fs.existsSync(statusFilePath)) {
+                    const fileContent = fs.readFileSync(statusFilePath, 'utf8');
+                    const statusData = JSON.parse(fileContent);
+                    statusSettings = statusData[guildId];
+                }
+            } catch (err) {
+                // File read failed, continue without it
+            }
+        }
+        
+        if (!statusSettings || !statusSettings.enabled) {
+            return res.status(400).json({ error: "Status tracking not enabled for this guild" });
+        }
+
+        // Add to pending posts with high priority
+        global.statusPendingPosts.unshift({
+            guildId: guildId,
+            userId: user_id,
+            channelId: statusSettings.channel_id,
+            useEmbed: statusSettings.use_embed,
+            offlineMessage: statusSettings.offline_message,
+            timestamp: Date.now()
+        });
+
+        res.json({ 
+            success: true, 
+            message: "Status update queued - will be processed by the bot",
+            status: "queued"
+        });
+    } catch (err) {
+        console.error('Error force updating status:', err);
+        res.status(500).json({ error: "Failed to queue status update", details: err.message });
+    }
+});
+
 
 // TRIALS & GIFTS ENDPOINTS
 app.post("/api/trials/send", (req, res) => {
