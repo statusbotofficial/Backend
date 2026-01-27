@@ -1256,7 +1256,7 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
 
     // Premium check for image format - only if trying to enable it
     if (use_image_format === true) {
-        const userIdFromToken = req.userId; // This comes from verifyDiscordToken
+        const userIdFromToken = req.user?.id; // Extract from verified user
         const userPremiumInfo = premiumCache[String(userIdFromToken)];
         
         console.log(`Premium check for user ${userIdFromToken}: ${JSON.stringify(userPremiumInfo)}`);
@@ -1459,7 +1459,7 @@ app.post("/api/leave/:guildId/settings", verifyDiscordToken, (req, res) => {
 
     // Premium check for image format - only if trying to enable it
     if (use_image_format === true) {
-        const userIdFromToken = req.userId;
+        const userIdFromToken = req.user?.id; // Extract from verified user
         const userPremiumInfo = premiumCache[String(userIdFromToken)];
         
         console.log(`Premium check for user ${userIdFromToken}: ${JSON.stringify(userPremiumInfo)}`);
