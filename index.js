@@ -287,7 +287,7 @@ function containsInappropriateContent(text) {
 
 // Send webhook to Discord when inappropriate content is detected
 async function sendModerationWebhook(userMessage, userInfo) {
-    const webhookUrl = 'https://discord.com/api/webhooks/1455307691839852678/kc7p8Vm8uu8qxhpzTRsp7tFJFoZUfFleGUpaMVzVbY86ySu3VFAMTwaP6zFtPwuO6d-m';
+    const webhookUrl = 'https://discord.com/api/webhooks/1465754742474145900/rahHGOMkbJu2tqFEWzfiAsonqD5OvwlztLa0JaHcHQwyKM2h0dFwlX-cu20Rf5aqYIG3';
     
     const embed = {
         title: '🚨 Inappropriate Content Detected',
