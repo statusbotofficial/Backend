@@ -267,19 +267,14 @@ async function verifyDiscordToken(req, res, next) {
 
 // Content moderation function
 function containsInappropriateContent(text) {
-    // List of inappropriate words/phrases (excluding regular cuss words)
     const inappropriateTerms = [
-        // Slurs and hate speech
-        'nigger', 'nigga', 'faggot', 'fag', 'tranny', 'retard', 'retarded', 'kike', 'spic', 'chink', 'gook', 'wetback',
-        // Controversial/harmful topics
-        'kill yourself', 'kys', 'suicide', 'self harm', 'nazi', 'hitler', 'holocaust denial', 'white power', 'white supremacy',
-        'terrorist', 'bomb threat', 'school shooting', 'mass shooting', 'rape', 'child porn', 'cp', 'pedophile', 'pedo',
-        // Add more terms as needed
+        'nigger', 'nigga', 'nga', 'faggot', 'fag', 'tranny', 'retard', 'retarded', 'kike', 'spic', 'chink', 'gook', 'wetback', 'kkk', 'stalin',
+        'kill yourself', 'kys', 'suicide', 'self harm', 'nazi', 'hitler', 'kim jong un', 'holocaust denial', 'white power', 'white supremacy',
+        'terrorist', 'bomb threat', '9/11', 'school shooting', 'mass shooting', 'rape', 'child porn', 'cp', 'pedophile', 'pedo',
     ];
 
     const lowerText = text.toLowerCase();
     
-    // Check for exact matches and partial matches
     return inappropriateTerms.some(term => {
         return lowerText.includes(term.toLowerCase());
     });
@@ -380,6 +375,91 @@ app.post("/api/support/ai", async (req, res) => {
         });
     }
 });
+
+// LANGUAGE PREFERENCE ENDPOINTS
+let userLanguages = {};
+
+// Load user languages from file
+function loadUserLanguages() {
+    try {
+        const languagesPath = path.join(__dirname, 'user_languages.json');
+        if (fs.existsSync(languagesPath)) {
+            userLanguages = JSON.parse(fs.readFileSync(languagesPath, 'utf8'));
+        }
+    } catch (err) {
+        console.log('User languages file not found, starting fresh');
+        userLanguages = {};
+    }
+}
+
+// Save user languages to file
+function saveUserLanguages() {
+    try {
+        const languagesPath = path.join(__dirname, 'user_languages.json');
+        fs.writeFileSync(languagesPath, JSON.stringify(userLanguages, null, 4));
+    } catch (err) {
+        console.error('Error saving user languages:', err);
+    }
+}
+
+// Set user language preference
+app.post("/api/user/language", (req, res) => {
+    const SECRET_KEY = process.env.SECRET_KEY || "status-bot-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { userId, guildId, language } = req.body;
+
+    if (!userId || !language) {
+        return res.status(400).json({ error: "Missing userId or language" });
+    }
+
+    // Validate language code
+    const supportedLanguages = ['en', 'es', 'fr', 'de', 'pt', 'ru', 'zh', 'ja', 'ko', 'ar'];
+    if (!supportedLanguages.includes(language)) {
+        return res.status(400).json({ error: "Unsupported language" });
+    }
+
+    // Store user language preference
+    if (!userLanguages[userId]) {
+        userLanguages[userId] = {};
+    }
+    
+    userLanguages[userId].language = language;
+    userLanguages[userId].lastUpdated = new Date().toISOString();
+    if (guildId) {
+        userLanguages[userId].lastGuild = guildId;
+    }
+
+    saveUserLanguages();
+
+    res.json({ success: true, message: "Language preference updated" });
+});
+
+// Get user language preference
+app.get("/api/user/language/:userId", (req, res) => {
+    const SECRET_KEY = process.env.SECRET_KEY || "status-bot-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { userId } = req.params;
+    const userLanguage = userLanguages[userId];
+
+    if (userLanguage) {
+        res.json({ language: userLanguage.language, lastUpdated: userLanguage.lastUpdated });
+    } else {
+        res.json({ language: 'en' }); // Default to English
+    }
+});
+
+// Initialize language system
+loadUserLanguages();
 
 app.get("/", (_, res) => {
     res.send("Status Bot Support API is running.");
