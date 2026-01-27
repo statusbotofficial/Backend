@@ -1254,10 +1254,16 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
         return res.status(400).json({ error: "guildId is required" });
     }
 
-    // Premium check for image format
+    // Premium check for image format - only if trying to enable it
     if (use_image_format === true) {
         const userIdFromToken = req.userId; // This comes from verifyDiscordToken
         const userPremiumInfo = premiumCache[String(userIdFromToken)];
+        
+        console.log(`Premium check for user ${userIdFromToken}: ${JSON.stringify(userPremiumInfo)}`);
+        
+        if (!userIdFromToken) {
+            return res.status(401).json({ error: "User ID not found in token" });
+        }
         
         if (!userPremiumInfo || !userPremiumInfo.active) {
             return res.status(403).json({ error: "Image welcome format is a premium-only feature" });
@@ -1451,10 +1457,16 @@ app.post("/api/leave/:guildId/settings", verifyDiscordToken, (req, res) => {
         return res.status(400).json({ error: "guildId is required" });
     }
 
-    // Premium check for image format
+    // Premium check for image format - only if trying to enable it
     if (use_image_format === true) {
         const userIdFromToken = req.userId;
         const userPremiumInfo = premiumCache[String(userIdFromToken)];
+        
+        console.log(`Premium check for user ${userIdFromToken}: ${JSON.stringify(userPremiumInfo)}`);
+        
+        if (!userIdFromToken) {
+            return res.status(401).json({ error: "User ID not found in token" });
+        }
         
         if (!userPremiumInfo || !userPremiumInfo.active) {
             return res.status(403).json({ error: "Image leave format is a premium-only feature" });
