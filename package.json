@@ -2,9 +2,9 @@
   "name": "status-bot-support-api",
   "version": "1.0.0",
   "type": "module",
-  "main": "index.js",
+  "main": "backend.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node backend.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
