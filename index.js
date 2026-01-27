@@ -1193,7 +1193,6 @@ app.get("/api/welcome/:guildId/settings", (req, res) => {
         const defaultSettings = {
             enabled: false,
             use_embed: false,
-            use_image_format: false,
             channel_id: null,
             message_text: 'Welcome to {server_name}, {user}!',
             embed_title: 'Welcome!',
@@ -1203,10 +1202,6 @@ app.get("/api/welcome/:guildId/settings", (req, res) => {
             embed_image: '',
             embed_color: '#5170ff',
             embed_fields: '[]',
-            image_background_url: 'https://i.postimg.cc/02T7Mfpm/Your-paragraph-text-(44).png',
-            image_title: 'Welcome!',
-            image_description: '',
-            image_image: '',
             member_count_channel_id: null,
             member_goal_channel_id: null,
             member_goal: 0
@@ -1224,7 +1219,6 @@ app.get("/api/welcome/:guildId/settings", (req, res) => {
         res.json({
             enabled: false,
             use_embed: false,
-            use_image_format: false,
             channel_id: null,
             message_text: 'Welcome to {server_name}, {user}!',
             embed_title: 'Welcome!',
@@ -1234,10 +1228,6 @@ app.get("/api/welcome/:guildId/settings", (req, res) => {
             embed_image: '',
             embed_color: '#5170ff',
             embed_fields: '[]',
-            image_background_url: 'https://i.postimg.cc/02T7Mfpm/Your-paragraph-text-(44).png',
-            image_title: 'Welcome!',
-            image_description: '',
-            image_image: '',
             member_count_channel_id: null,
             member_goal_channel_id: null,
             member_goal: 0
@@ -1248,26 +1238,10 @@ app.get("/api/welcome/:guildId/settings", (req, res) => {
 app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
-    const { enabled, use_embed, use_image_format, channel_id, message_text, embed_title, embed_description, embed_footer, embed_thumbnail, embed_image, embed_color, embed_fields, image_background_url, image_title, image_description, image_image, member_count_channel_id, member_goal_channel_id, member_goal } = req.body;
+    const { enabled, use_embed, channel_id, message_text, embed_title, embed_description, embed_footer, embed_thumbnail, embed_image, embed_color, embed_fields, member_count_channel_id, member_goal_channel_id, member_goal } = req.body;
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
-    }
-
-    // Premium check for image format - only if trying to enable it
-    if (use_image_format === true) {
-        const userIdFromToken = req.user?.id; // Extract from verified user
-        const userPremiumInfo = premiumCache[String(userIdFromToken)];
-        
-        console.log(`Premium check for user ${userIdFromToken}: ${JSON.stringify(userPremiumInfo)}`);
-        
-        if (!userIdFromToken) {
-            return res.status(401).json({ error: "User ID not found in token" });
-        }
-        
-        if (!userPremiumInfo || !userPremiumInfo.active) {
-            return res.status(403).json({ error: "Image welcome format is a premium-only feature" });
-        }
     }
 
     if (!global.welcomeSettings) {
@@ -1277,7 +1251,6 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
     global.welcomeSettings[guildId] = {
         enabled: enabled === true,
         use_embed: use_embed === true,
-        use_image_format: use_image_format === true,
         channel_id: channel_id || null,
         message_text: message_text || "Welcome to {server_name}, {user}!",
         embed_title: embed_title ?? "Welcome!",
@@ -1287,10 +1260,6 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
         embed_image: embed_image || "",
         embed_color: embed_color || "#5170ff",
         embed_fields: embed_fields || "[]",
-        image_background_url: image_background_url || "https://i.postimg.cc/02T7Mfpm/Your-paragraph-text-(44).png",
-        image_title: image_title || "Welcome!",
-        image_description: image_description || "",
-        image_image: image_image || "",
         member_count_channel_id: member_count_channel_id || null,
         member_goal_channel_id: member_goal_channel_id || null,
         member_goal: member_goal || 0,
@@ -1313,7 +1282,6 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
         welcomeData[guildId] = {
             enabled: enabled === true,
             use_embed: use_embed === true,
-            use_image_format: use_image_format === true,
             channel_id: channel_id || null,
             message_text: message_text || "Welcome to {server_name}, {user}!",
             embed_title: embed_title ?? "Welcome!",
@@ -1323,10 +1291,6 @@ app.post("/api/welcome/:guildId/settings", verifyDiscordToken, (req, res) => {
             embed_image: embed_image || "",
             embed_color: embed_color || "#5170ff",
             embed_fields: embed_fields || "[]",
-            image_background_url: image_background_url || "https://i.postimg.cc/02T7Mfpm/Your-paragraph-text-(44).png",
-            image_title: image_title || "Welcome!",
-            image_description: image_description || "",
-            image_image: image_image || "",
             member_count_channel_id: member_count_channel_id || null,
             member_goal_channel_id: member_goal_channel_id || null,
             member_goal: member_goal || 0
@@ -1402,7 +1366,6 @@ app.get("/api/leave/:guildId/settings", (req, res) => {
         const defaultSettings = {
             enabled: false,
             use_embed: false,
-            use_image_format: false,
             channel_id: null,
             message_text: 'Goodbye {user}!',
             embed_title: 'Member Left',
@@ -1411,11 +1374,7 @@ app.get("/api/leave/:guildId/settings", (req, res) => {
             embed_thumbnail: '',
             embed_image: '',
             embed_color: '#5170ff',
-            embed_fields: '[]',
-            image_background_url: 'https://i.postimg.cc/G3MWCBkB/Your-paragraph-text-(45).png',
-            image_title: 'Member Left',
-            image_description: '',
-            image_image: ''
+            embed_fields: '[]'
         };
 
         let settings = defaultSettings;
@@ -1430,7 +1389,6 @@ app.get("/api/leave/:guildId/settings", (req, res) => {
         res.json({
             enabled: false,
             use_embed: false,
-            use_image_format: false,
             channel_id: null,
             message_text: 'Goodbye {user}!',
             embed_title: 'Member Left',
@@ -1439,11 +1397,7 @@ app.get("/api/leave/:guildId/settings", (req, res) => {
             embed_thumbnail: '',
             embed_image: '',
             embed_color: '#5170ff',
-            embed_fields: '[]',
-            image_background_url: 'https://i.postimg.cc/G3MWCBkB/Your-paragraph-text-(45).png',
-            image_title: 'Member Left',
-            image_description: '',
-            image_image: ''
+            embed_fields: '[]'
         });
     }
 });
@@ -1451,26 +1405,10 @@ app.get("/api/leave/:guildId/settings", (req, res) => {
 app.post("/api/leave/:guildId/settings", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
 
-    const { enabled, use_embed, use_image_format, channel_id, message_text, embed_title, embed_description, embed_footer, embed_thumbnail, embed_image, embed_color, embed_fields, image_background_url, image_title, image_description, image_image } = req.body;
+    const { enabled, use_embed, channel_id, message_text, embed_title, embed_description, embed_footer, embed_thumbnail, embed_image, embed_color, embed_fields } = req.body;
 
     if (!guildId) {
         return res.status(400).json({ error: "guildId is required" });
-    }
-
-    // Premium check for image format - only if trying to enable it
-    if (use_image_format === true) {
-        const userIdFromToken = req.user?.id; // Extract from verified user
-        const userPremiumInfo = premiumCache[String(userIdFromToken)];
-        
-        console.log(`Premium check for user ${userIdFromToken}: ${JSON.stringify(userPremiumInfo)}`);
-        
-        if (!userIdFromToken) {
-            return res.status(401).json({ error: "User ID not found in token" });
-        }
-        
-        if (!userPremiumInfo || !userPremiumInfo.active) {
-            return res.status(403).json({ error: "Image leave format is a premium-only feature" });
-        }
     }
 
     if (!global.leaveSettings) {
@@ -1480,7 +1418,6 @@ app.post("/api/leave/:guildId/settings", verifyDiscordToken, (req, res) => {
     global.leaveSettings[guildId] = {
         enabled: enabled === true,
         use_embed: use_embed === true,
-        use_image_format: use_image_format === true,
         channel_id: channel_id || null,
         message_text: message_text || "Goodbye {user}!",
         embed_title: embed_title ?? "Member Left",
@@ -1490,10 +1427,6 @@ app.post("/api/leave/:guildId/settings", verifyDiscordToken, (req, res) => {
         embed_image: embed_image || "",
         embed_color: embed_color || "#5170ff",
         embed_fields: embed_fields || "[]",
-        image_background_url: image_background_url || "https://i.postimg.cc/G3MWCBkB/Your-paragraph-text-(45).png",
-        image_title: image_title || "Member Left",
-        image_description: image_description || "",
-        image_image: image_image || "",
         lastUpdated: new Date().toISOString()
     };
 
@@ -1513,7 +1446,6 @@ app.post("/api/leave/:guildId/settings", verifyDiscordToken, (req, res) => {
         leaveData[guildId] = {
             enabled: enabled === true,
             use_embed: use_embed === true,
-            use_image_format: use_image_format === true,
             channel_id: channel_id || null,
             message_text: message_text || "Goodbye {user}!",
             embed_title: embed_title ?? "Member Left",
@@ -1522,11 +1454,7 @@ app.post("/api/leave/:guildId/settings", verifyDiscordToken, (req, res) => {
             embed_thumbnail: embed_thumbnail || "",
             embed_image: embed_image || "",
             embed_color: embed_color || "#5170ff",
-            embed_fields: embed_fields || "[]",
-            image_background_url: image_background_url || "https://i.postimg.cc/02T7Mfpm/Your-paragraph-text-(44).png",
-            image_title: image_title || "Member Left",
-            image_description: image_description || "",
-            image_image: image_image || ""
+            embed_fields: embed_fields || "[]"
         };
         
         fs.writeFileSync(leaveFilePath, JSON.stringify(leaveData, null, 4));
