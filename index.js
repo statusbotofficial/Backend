@@ -1406,7 +1406,7 @@ app.get("/api/leave/:guildId/settings", (req, res) => {
             embed_image: '',
             embed_color: '#5170ff',
             embed_fields: '[]',
-            image_background_url: 'https://i.postimg.cc/02T7Mfpm/Your-paragraph-text-(44).png',
+            image_background_url: 'https://i.postimg.cc/G3MWCBkB/Your-paragraph-text-(45).png',
             image_title: 'Member Left',
             image_description: '',
             image_image: ''
@@ -1434,7 +1434,7 @@ app.get("/api/leave/:guildId/settings", (req, res) => {
             embed_image: '',
             embed_color: '#5170ff',
             embed_fields: '[]',
-            image_background_url: 'https://i.postimg.cc/02T7Mfpm/Your-paragraph-text-(44).png',
+            image_background_url: 'https://i.postimg.cc/G3MWCBkB/Your-paragraph-text-(45).png',
             image_title: 'Member Left',
             image_description: '',
             image_image: ''
