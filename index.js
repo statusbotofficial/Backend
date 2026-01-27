@@ -264,13 +264,91 @@ async function verifyDiscordToken(req, res, next) {
 
 
 // AI SUPPORT ENDPOINTS
+
+// Content moderation function
+function containsInappropriateContent(text) {
+    // List of inappropriate words/phrases (excluding regular cuss words)
+    const inappropriateTerms = [
+        // Slurs and hate speech
+        'nigger', 'nigga', 'faggot', 'fag', 'tranny', 'retard', 'retarded', 'kike', 'spic', 'chink', 'gook', 'wetback',
+        // Controversial/harmful topics
+        'kill yourself', 'kys', 'suicide', 'self harm', 'nazi', 'hitler', 'holocaust denial', 'white power', 'white supremacy',
+        'terrorist', 'bomb threat', 'school shooting', 'mass shooting', 'rape', 'child porn', 'cp', 'pedophile', 'pedo',
+        // Add more terms as needed
+    ];
+
+    const lowerText = text.toLowerCase();
+    
+    // Check for exact matches and partial matches
+    return inappropriateTerms.some(term => {
+        return lowerText.includes(term.toLowerCase());
+    });
+}
+
+// Send webhook to Discord when inappropriate content is detected
+async function sendModerationWebhook(userMessage, userInfo) {
+    const webhookUrl = 'https://discord.com/api/webhooks/1455307691839852678/kc7p8Vm8uu8qxhpzTRsp7tFJFoZUfFleGUpaMVzVbY86ySu3VFAMTwaP6zFtPwuO6d-m';
+    
+    const embed = {
+        title: '🚨 Inappropriate Content Detected',
+        description: `A user has been detected saying inappropriate content in AI Support.`,
+        color: 0xff0000, // Red color
+        fields: [
+            {
+                name: '👤 User',
+                value: userInfo ? `**Username:** ${userInfo.username}\n**User ID:** ${userInfo.id}` : 'Unknown User',
+                inline: false
+            },
+            {
+                name: '💬 Message',
+                value: `\`\`\`${userMessage}\`\`\``,
+                inline: false
+            },
+            {
+                name: '📅 Timestamp',
+                value: new Date().toLocaleString(),
+                inline: true
+            }
+        ],
+        footer: {
+            text: 'Status Bot Moderation System'
+        }
+    };
+
+    try {
+        await fetch(webhookUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                embeds: [embed]
+            })
+        });
+    } catch (error) {
+        console.error('Failed to send moderation webhook:', error);
+    }
+}
+
 app.post("/api/support/ai", async (req, res) => {
     try {
         const message = req.body?.message?.trim();
+        const user = req.body?.user;
 
         if (!message || message.length > 500) {
             return res.status(400).json({
                 reply: "Please enter a valid message under 500 characters."
+            });
+        }
+
+        // Check for inappropriate content before processing
+        if (containsInappropriateContent(message)) {
+            // Send webhook notification
+            await sendModerationWebhook(message, user);
+            
+            // Return appropriate response without processing through AI
+            return res.json({
+                reply: "I cannot assist with inappropriate or harmful content. Please keep our conversation respectful and appropriate. If you need help with Status Bot features, I'm happy to help!"
             });
         }
 
