@@ -2445,7 +2445,6 @@ app.post("/api/notifications/send", (req, res) => {
 
         const notificationId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const createdAt = Date.now();
-        const expiresAt = createdAt + (7 * 24 * 60 * 60 * 1000); // 7 days
 
         const notification = {
             id: notificationId,
@@ -2453,7 +2452,6 @@ app.post("/api/notifications/send", (req, res) => {
             message,
             type,
             createdAt,
-            expiresAt,
             read: false,
             isGlobal: sendToAll || (targetUsers && targetUsers.length === 0)
         };
@@ -2482,6 +2480,10 @@ app.post("/api/notifications/send", (req, res) => {
         };
 
         if (sendToAll || (targetUsers && targetUsers.length === 0)) {
+            // Add to global notifications for dev management
+            globalNotifications.push(notification);
+            saveGlobalData();
+            
             const allUserIds = Object.keys(knownUsers);
             allUserIds.forEach(userId => {
                 sendNotificationToUser(userId);
@@ -2562,16 +2564,12 @@ app.get("/api/user/:userId/notifications", (req, res) => {
         let notifications = [];
         const userNotifications = notificationsData[userId];
         if (userNotifications && userNotifications.notifications) {
-            notifications = userNotifications.notifications.filter(n => {
-                const createdAt = n.createdAt || n.expiresAt - (n.durationDays * 24 * 60 * 60 * 1000);
-                return (now - createdAt) < SEVEN_DAYS_MS; // Show for 7 days
-            });
+            // Show all notifications (no expiration)
+            notifications = userNotifications.notifications;
         }
 
-        const activeGlobalNotifications = globalNotifications.filter(n => {
-            const createdAt = n.createdAt || n.expiresAt - (n.durationDays * 24 * 60 * 60 * 1000);
-            return (now - createdAt) < SEVEN_DAYS_MS; // Show for 7 days
-        });
+        // Show all global notifications (no expiration)
+        const activeGlobalNotifications = globalNotifications;
         notifications = notifications.concat(activeGlobalNotifications);
 
         res.json({ notifications });
@@ -2645,6 +2643,78 @@ app.post("/api/notifications/:notificationId/read", (req, res) => {
     } catch (err) {
         console.error('Error marking notification as read:', err);
         res.status(500).json({ error: "Failed to mark notification as read" });
+    }
+});
+
+// ANNOUNCEMENT MANAGEMENT ENDPOINTS (DEV)
+app.get("/api/announcements", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        res.json({ 
+            announcements: globalNotifications.map(n => ({
+                id: n.id,
+                title: n.title,
+                message: n.message,
+                type: n.type,
+                createdAt: n.createdAt,
+                createdAtFormatted: new Date(n.createdAt).toLocaleString()
+            }))
+        });
+    } catch (err) {
+        console.error('Error fetching announcements:', err);
+        res.status(500).json({ error: "Failed to fetch announcements" });
+    }
+});
+
+app.delete("/api/announcements/:announcementId", (req, res) => {
+    const SECRET_KEY = process.env.BOT_STATS_SECRET || "status-bot-stats-secret-key";
+    const authHeader = req.headers['authorization'] || '';
+    
+    if (authHeader !== `Bearer ${SECRET_KEY}`) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const { announcementId } = req.params;
+        
+        const announcementIndex = globalNotifications.findIndex(n => n.id === announcementId);
+        if (announcementIndex === -1) {
+            return res.status(404).json({ error: "Announcement not found" });
+        }
+
+        const removedAnnouncement = globalNotifications[announcementIndex];
+        globalNotifications.splice(announcementIndex, 1);
+        saveGlobalData();
+
+        // Also remove from all user notifications
+        Object.values(notificationsData).forEach(userData => {
+            if (userData.notifications) {
+                const userNotifIndex = userData.notifications.findIndex(n => n.id === announcementId);
+                if (userNotifIndex !== -1) {
+                    userData.notifications.splice(userNotifIndex, 1);
+                }
+            }
+        });
+        saveNotifications();
+
+        res.json({ 
+            success: true, 
+            message: `Announcement "${removedAnnouncement.title}" removed successfully`,
+            removedAnnouncement: {
+                id: removedAnnouncement.id,
+                title: removedAnnouncement.title,
+                createdAt: removedAnnouncement.createdAt
+            }
+        });
+    } catch (err) {
+        console.error('Error removing announcement:', err);
+        res.status(500).json({ error: "Failed to remove announcement" });
     }
 });
 
