@@ -2007,8 +2007,16 @@ app.post("/api/status/:guildId/post", (req, res) => {
 app.post("/api/status/:guildId/force-update", verifyDiscordToken, (req, res) => {
     const { guildId } = req.params;
     const { user_id } = req.body;
+    
+    console.log('🔄 Force update request received:', {
+        guildId,
+        user_id,
+        hasGuildId: !!guildId,
+        hasUserId: !!user_id
+    });
 
     if (!guildId || !user_id) {
+        console.log('❌ Missing required parameters for force update');
         return res.status(400).json({ error: "guildId and user_id are required" });
     }
 
