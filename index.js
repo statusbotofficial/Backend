@@ -281,7 +281,7 @@ app.options("*", cors());
 
 // AUTHENTICATION & TOKEN CACHE
 const tokenCache = new Map();
-const TOKEN_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const TOKEN_CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours - Discord tokens are valid for much longer
 
 async function verifyDiscordToken(req, res, next) {
     const authHeader = req.headers['authorization'] || '';
@@ -303,6 +303,10 @@ async function verifyDiscordToken(req, res, next) {
     if (tokenCache.has(token)) {
         const cached = tokenCache.get(token);
         if (Date.now() - cached.timestamp < TOKEN_CACHE_TTL) {
+            // If token was previously invalid, fail fast
+            if (cached.invalid) {
+                return res.status(401).json({ error: "Unauthorized - Token previously invalid" });
+            }
             console.log('✅ Token verified from cache for:', cached.user.username);
             req.user = cached.user;
             return next();
@@ -322,6 +326,10 @@ async function verifyDiscordToken(req, res, next) {
         if (!userRes.ok) {
             const errorText = await userRes.text();
             console.error('❌ Discord API rejected token:', userRes.status, errorText);
+            
+            // Cache invalid token to prevent repeated API calls
+            tokenCache.set(token, { invalid: true, timestamp: Date.now() });
+            
             return res.status(401).json({ error: "Unauthorized - Token invalid or expired" });
         }
 
@@ -994,7 +1002,7 @@ app.post("/api/resolve-user/:guildId", (req, res) => {
 });
 
 let guildMembersCache = {};
-const MEMBERS_CACHE_TTL = 30 * 60 * 1000; // Increased to 30 minutes for member counts
+const MEMBERS_CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours - members don't change often
 
 // Initialize global tracking variables
 global.apiRequestCount = global.apiRequestCount || 0;
