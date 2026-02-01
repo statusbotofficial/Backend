@@ -1016,13 +1016,18 @@ async function fetchWithRetry(url, options, maxRetries = 3) { // Reduced from 5 
                 const retryAfter = response.headers.get('Retry-After');
                 const retryAfterMs = retryAfter ? parseInt(retryAfter) * 1000 : Math.min(Math.pow(2, attempt + 1) * 1000, 30000);
                 
-                console.warn(`⚠️ Rate limited on attempt ${attempt + 1}/${maxRetries}. Waiting ${retryAfterMs}ms...`);
+                // Cap retry delay at 5 minutes (300,000ms) to prevent extremely long waits
+                const cappedDelayMs = Math.min(retryAfterMs, 300000);
+                
+                console.warn(`⚠️ Rate limited on attempt ${attempt + 1}/${maxRetries}. Discord wants ${retryAfterMs}ms, capping at ${cappedDelayMs}ms...`);
                 
                 if (attempt < maxRetries - 1) {
-                    await new Promise(resolve => setTimeout(resolve, retryAfterMs));
+                    await new Promise(resolve => setTimeout(resolve, cappedDelayMs));
                     continue;
                 } else {
-                    throw new Error(`Rate limited after ${maxRetries} attempts`);
+                    // If this is the last attempt and we're still rate limited, fail fast
+                    console.error(`💥 Rate limited on final attempt. Discord API likely overwhelmed.`);
+                    throw new Error(`Rate limited: Discord requested ${retryAfterMs}ms delay, too long to wait`);
                 }
             }
             
@@ -1083,6 +1088,9 @@ app.get('/api/guild/:guildId/members', async (req, res) => {
 
             if (!response.ok) {
                 console.error(`Discord API returned ${response.status} for guild ${guildId}`);
+                if (response.status === 429) {
+                    throw new Error(`Discord API rate limited: ${response.status}`);
+                }
                 throw new Error(`Discord API error: ${response.status}`);
             }
 
@@ -1103,6 +1111,16 @@ app.get('/api/guild/:guildId/members', async (req, res) => {
         res.json({ members: memberList });
     } catch (err) {
         console.error('Error fetching guild members:', err);
+        
+        // Handle rate limit errors specifically
+        if (err.message.includes('Rate limited') || err.message.includes('too long to wait')) {
+            return res.status(429).json({ 
+                error: "Discord API overwhelmed", 
+                message: "Discord API is severely rate limited. Please wait before trying again.",
+                retryAfter: 300 // Suggest 5 minutes
+            });
+        }
+        
         res.status(500).json({ error: "Failed to fetch guild members", details: err.message });
     }
 });
