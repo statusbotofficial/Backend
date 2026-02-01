@@ -457,6 +457,41 @@ app.get("/", (_, res) => {
     res.send("Status Bot Support API is running.");
 });
 
+// Health check endpoint
+app.get("/api/health", async (req, res) => {
+    try {
+        const health = {
+            status: "healthy",
+            timestamp: new Date().toISOString(),
+            uptime: process.uptime(),
+            memory: {
+                used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+                total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024)
+            },
+            discord: {
+                token: process.env.DISCORD_BOT_TOKEN ? "✅ Present" : "❌ Missing",
+                rateLimitStats: {
+                    totalRequests: global.apiRequestCount || 0,
+                    rateLimitHits: global.rateLimitHits || 0,
+                    lastRateLimit: global.lastRateLimit || null
+                }
+            },
+            cache: {
+                guildMembersEntries: Object.keys(guildMembersCache || {}).length,
+                premiumCacheEntries: Object.keys(premiumCache || {}).length
+            }
+        };
+        
+        res.json(health);
+    } catch (error) {
+        res.status(500).json({
+            status: "unhealthy",
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
 
 // BOT STATS ENDPOINTS
 app.post("/api/bot-stats/update", (req, res) => {
@@ -961,35 +996,63 @@ app.post("/api/resolve-user/:guildId", (req, res) => {
 let guildMembersCache = {};
 const MEMBERS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-async function fetchWithRetry(url, options, maxRetries = 5) {
+// Initialize global tracking variables
+global.apiRequestCount = global.apiRequestCount || 0;
+global.rateLimitHits = global.rateLimitHits || 0;
+global.lastRateLimit = global.lastRateLimit || null;
+
+async function fetchWithRetry(url, options, maxRetries = 3) { // Reduced from 5 to 3
     let lastError;
     
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
+            global.apiRequestCount++;
             const response = await fetch(url, options);
             
             if (response.status === 429) {
-                const retryAfter = response.headers.get('Retry-After') || (Math.pow(2, attempt + 1) * 1000);
-                const delayMs = parseInt(retryAfter);
-                await new Promise(resolve => setTimeout(resolve, delayMs));
-                continue;
+                global.rateLimitHits++;
+                global.lastRateLimit = new Date().toISOString();
+                
+                const retryAfter = response.headers.get('Retry-After');
+                const retryAfterMs = retryAfter ? parseInt(retryAfter) * 1000 : Math.min(Math.pow(2, attempt + 1) * 1000, 30000);
+                
+                console.warn(`⚠️ Rate limited on attempt ${attempt + 1}/${maxRetries}. Waiting ${retryAfterMs}ms...`);
+                
+                if (attempt < maxRetries - 1) {
+                    await new Promise(resolve => setTimeout(resolve, retryAfterMs));
+                    continue;
+                } else {
+                    throw new Error(`Rate limited after ${maxRetries} attempts`);
+                }
             }
             
             if (response.ok) {
+                if (attempt > 0) {
+                    console.log(`✅ Request succeeded on attempt ${attempt + 1}/${maxRetries}`);
+                }
                 return response;
             }
             
-            return response;
+            // For non-429 errors, still return the response (let caller handle it)
+            console.warn(`⚠️ API returned ${response.status} on attempt ${attempt + 1}/${maxRetries}`);
+            if (attempt === maxRetries - 1) {
+                return response; // Return even if not ok, let caller handle
+            }
+            
         } catch (err) {
             lastError = err;
+            console.error(`❌ Network error on attempt ${attempt + 1}/${maxRetries}:`, err.message);
+            
             if (attempt < maxRetries - 1) {
-                const delay = Math.pow(2, attempt + 1) * 1000;
+                const delay = Math.min(Math.pow(2, attempt + 1) * 1000, 10000); // Cap at 10s
+                console.log(`⏳ Retrying in ${delay}ms...`);
                 await new Promise(resolve => setTimeout(resolve, delay));
             }
         }
     }
     
-    throw lastError || new Error('Max retries exceeded');
+    console.error(`💥 All ${maxRetries} attempts failed for ${url}`);
+    throw lastError || new Error(`Max retries (${maxRetries}) exceeded`);
 }
 
 app.get('/api/guild/:guildId/members', async (req, res) => {
