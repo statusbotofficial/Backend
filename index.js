@@ -994,7 +994,7 @@ app.post("/api/resolve-user/:guildId", (req, res) => {
 });
 
 let guildMembersCache = {};
-const MEMBERS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const MEMBERS_CACHE_TTL = 30 * 60 * 1000; // Increased to 30 minutes for member counts
 
 // Initialize global tracking variables
 global.apiRequestCount = global.apiRequestCount || 0;
@@ -1071,14 +1071,23 @@ app.get('/api/guild/:guildId/members', async (req, res) => {
 
     try {
         if (guildMembersCache[guildId] && Date.now() - guildMembersCache[guildId].timestamp < MEMBERS_CACHE_TTL) {
-            console.log(`✅ Returning cached members for guild ${guildId}`);
-            return res.json({ members: guildMembersCache[guildId].data });
+            console.log(`✅ Returning cached member info for guild ${guildId}`);
+            const cached = guildMembersCache[guildId].data;
+            return res.json({ 
+                members: [], 
+                memberCount: cached.memberCount || 0,
+                onlineCount: cached.onlineCount || 0,
+                guildName: cached.guildName || ''
+            });
         }
 
         // Use deduplication to prevent duplicate API calls if multiple requests arrive simultaneously
-        const memberList = await deduplicateRequest(`members_${guildId}`, async () => {
+        const guildInfo = await deduplicateRequest(`members_${guildId}`, async () => {
+            console.log(`🔍 Fetching guild info with member counts for ${guildId}...`);
+            
+            // Use guild info endpoint instead of members list - much less rate limited
             const response = await fetchWithRetry(
-                `https://discord.com/api/v10/guilds/${guildId}/members?limit=1000`,
+                `https://discord.com/api/v10/guilds/${guildId}?with_counts=true`,
                 {
                     headers: {
                         'Authorization': `Bot ${process.env.DISCORD_BOT_TOKEN}`
@@ -1094,21 +1103,29 @@ app.get('/api/guild/:guildId/members', async (req, res) => {
                 throw new Error(`Discord API error: ${response.status}`);
             }
 
-            const members = await response.json();
+            const guild = await response.json();
+            console.log(`✅ Successfully fetched guild info for ${guildId}, member count: ${guild.approximate_member_count}`);
             
-            return members.map(member => ({
-                id: member.user.id,
-                username: member.user.username,
-                displayName: member.nick || member.user.username
-            }));
+            return {
+                memberCount: guild.approximate_member_count || 0,
+                onlineCount: guild.approximate_presence_count || 0,
+                guildName: guild.name,
+                guildId: guild.id
+            };
         });
 
         guildMembersCache[guildId] = {
-            data: memberList,
+            data: guildInfo,
             timestamp: Date.now()
         };
 
-        res.json({ members: memberList });
+        // Return the member count info instead of full member list
+        res.json({ 
+            members: [], // Empty for now, since we're just getting counts
+            memberCount: guildInfo.memberCount,
+            onlineCount: guildInfo.onlineCount,
+            guildName: guildInfo.guildName
+        });
     } catch (err) {
         console.error('Error fetching guild members:', err);
         
