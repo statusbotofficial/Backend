@@ -235,11 +235,22 @@ Remember: You're the expert on Status Bot! Help users succeed with clear, action
 
 
 app.use(cors({
-    origin: [
-        "https://status-bot.xyz",
-        "https://www.status-bot.xyz",
-        "https://status-bot.xyz"
-    ],
+    origin: function (origin, callback) {
+        // Allow requests from your domains and iframes with null origin
+        const allowedOrigins = [
+            "https://status-bot.xyz",
+            "https://www.status-bot.xyz",
+            "http://localhost:5173",
+            "http://localhost:3000",
+            null // Allow iframes with null origin (from data URLs, files, etc.)
+        ];
+        
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(null, true); // Allow all origins for static assets
+        }
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true
